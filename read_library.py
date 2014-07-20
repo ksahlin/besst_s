@@ -1,8 +1,10 @@
 import sys
+from operator import itemgetter
+from collections import defaultdict
 
 from mathstats.normaldist.normal import MaxObsDistr
 
-import bam_parser
+from parser import bam_parser
 
 
 def AdjustInsertsizeDist(mean_insert, std_dev_insert, insert_list):
@@ -35,22 +37,31 @@ def remove_outliers(ins_size_reads):
 
 class Library(object):
 	"""docstring for Library"""
-	def __init__(self, name, bam_path, lib_type):
+	def __init__(self, lib_type, aligner, bam_path, link_file):
 		super(Library, self).__init__()
-		self.name = name
 		self.bam_path = bam_path
 		self.lib_type = lib_type
+		self.aligner = aligner
+		self.link_file = open(link_file,'r+')
 
+	def calculate_coverage(self, contigs):
+		bam_iter = bam_parser.BamParser(self.bam_path)
+		for read in bam_iter.aligned_reads():
+			contigs[bam_iter.bam_file.getrname(read.tid)].coverage += read.alen
+		for contig in contigs.itervalues():
+			contig.coverage = contig.coverage/ float(contig.length)
 
 	def get_libary_metrics(self):
 		ins_size_reads_innies = []
 		ins_size_reads_outies = []
-		for read_type,read in bam_parser.BamParser(self.bam_path).proper_aligned_unique_pairs('bwa_mem',samples=1000000):
-			if self.lib_type == 'MP': 
+		for read_type,read in bam_parser.BamParser(self.bam_path).proper_aligned_unique_pairs(self.aligner,samples=1000000):
+			if self.lib_type == 'mp': 
 				if read_type == 'innie':
 					ins_size_reads_innies.append(abs(read.tlen))
 				elif read_type == 'outie':
 					ins_size_reads_outies.append(abs(read.tlen))
+			elif self.lib_type =='pe':
+				ins_size_reads_innies.append(abs(read.tlen))
 			#print read.tlen #, read
 		#self.mean =
 		#self.sd =
@@ -59,17 +70,116 @@ class Library(object):
 
 		count_contamine, count_total = 0,0
 
-		if self.lib_type == 'MP':
+		if self.lib_type == 'mp':
 			for read in bam_parser.BamParser(self.bam_path).aligned_reads():
 				if bam_parser.is_proper_aligned_unique_innie(read):
 					count_contamine += 1
 				count_total += 1
 			self.contamine_rate = count_contamine/float(count_total)
-			print self.contamine_rate
 		else:
 			self.contamine_rate = False
 
 
+	def sorted_bam_to_link_file(self,contigs, kmer_overlap):
+		bam_iter = bam_parser.BamParser(self.bam_path)
+		edges = {}
+		for contig in contigs.keys():
+			edges[contig] = ContigConnections(contig)
+
+		for read1,read2 in bam_iter.unique_reads_on_different_references(self.aligner):
+			if read1.rnext != read2.tid or read2.rnext != read1.tid:
+				print read1,read2
+			index, ctg = min(enumerate([read1.tid,read2.tid]), key=itemgetter(1))
+
+			if self.lib_type == 'mp':
+				mp_obs1, mp_obs2 = bam_parser.get_mp_observation(read1, read2, bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read1.tid)],bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read2.tid)] )
+				pe_obs1, pe_obs2 = bam_parser.get_pe_observation(read1, read2, bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read1.tid)],bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read2.tid)] )
+				
+				if mp_obs1 + mp_obs2 < self.mean_outies + 4*self.sd_outies + kmer_overlap and pe_obs1 + pe_obs2 < self.mean_innies + 4*self.sd_innies + kmer_overlap:
+					if index == 0:
+						edges[bam_iter.bam_file.getrname(ctg)].add_pe_link(pe_obs1,pe_obs2, read1.is_reverse, read2.is_reverse, bam_iter.bam_file.getrname(read2.tid),'pe_am') 
+						edges[bam_iter.bam_file.getrname(ctg)].add_mp_link(mp_obs1,mp_obs2, read1.is_reverse, read2.is_reverse, bam_iter.bam_file.getrname(read2.tid),'mp_am')
+					else:
+						edges[bam_iter.bam_file.getrname(ctg)].add_pe_link(pe_obs2,pe_obs1, read2.is_reverse, read1.is_reverse, bam_iter.bam_file.getrname(read1.tid),'pe_am') 
+						edges[bam_iter.bam_file.getrname(ctg)].add_mp_link(mp_obs2,mp_obs1, read2.is_reverse, read1.is_reverse, bam_iter.bam_file.getrname(read1.tid),'mp_am')
+			
+				elif mp_obs1 + mp_obs2 < self.mean_outies + 4*self.sd_outies + kmer_overlap :	
+					if index == 0:
+						edges[bam_iter.bam_file.getrname(ctg)].add_mp_link(mp_obs1,mp_obs2, read1.is_reverse, read2.is_reverse, bam_iter.bam_file.getrname(read2.tid), 'mp') 
+					else:
+						edges[bam_iter.bam_file.getrname(ctg)].add_mp_link(mp_obs2,mp_obs1, read2.is_reverse, read1.is_reverse, bam_iter.bam_file.getrname(read1.tid),'mp') 
+					
+				elif pe_obs1 + pe_obs2 < self.mean_innies + 4*self.sd_innies + kmer_overlap:
+					if index == 0:
+						edges[bam_iter.bam_file.getrname(ctg)].add_pe_link(pe_obs1,pe_obs2, read1.is_reverse, read2.is_reverse, bam_iter.bam_file.getrname(read2.tid),'pe') 
+					else:
+						edges[bam_iter.bam_file.getrname(ctg)].add_pe_link(pe_obs2,pe_obs1, read2.is_reverse, read1.is_reverse, bam_iter.bam_file.getrname(read1.tid), 'pe') 
+				else:
+					print 'spurious link'
+
+			else:
+				obs1, obs2 = bam_parser.get_pe_observation(read1, read2, bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read1.tid)],bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read2.tid)])
+				if obs1 + obs2 < self.mean_innies + 4*self.sd_innies + kmer_overlap:
+					if index == 0:
+						edges[bam_iter.bam_file.getrname(ctg)].add_pe_link(obs1,obs2, read1.is_reverse, read2.is_reverse, bam_iter.bam_file.getrname(read2.tid),'pe') 
+					else:
+						edges[bam_iter.bam_file.getrname(ctg)].add_pe_link(obs2, obs1, read2.is_reverse, read1.is_reverse, bam_iter.bam_file.getrname(read1.tid),'pe') 
+
+			 #,  bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read1.tid)],bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read2.tid)]
+			#print read1,read2 #, read.tlen
+			#link_file.write(str(seq_id)+'\t'+contig.name+'\t'+ str(start)+'\t'+str(stop)+'\n')
+		for connection in edges:
+			if str(edges[connection]):
+				self.link_file.write(str(edges[connection]))
+		self.link_file.seek(0)
+				#print >> self.link_file, edges[connection]
+	
+
+	def __str__(self):
+		if self.lib_type == 'mp':
+			return 'Library type:{0}\nLibrary mean:{1} \
+			\nLibrary sd:{2}\nAligned with:{3}\nContamination rate:{4}\nContamination mean:{5}\n Contamination sd:{6}'.format(self.lib_type, 
+				self.mean_outies,self.sd_outies,self.aligner,
+				self.contamine_rate, self.mean_innies,self.sd_innies)
+		else:
+			return 'Library type:{0}\nLibrary mean:{1}\nLibrary sd:{2}\nAligned with:{3} '.format(self.lib_type, self.mean_innies,self.sd_innies,self.aligner)
+
+
+
+class ContigConnections(object):
+    """docstring for ContigConnections"""
+    def __init__(self, name):
+        super(ContigConnections, self).__init__()
+        self.name = name
+        self.connections_forward = defaultdict(list)
+        self.connections_reverse = defaultdict(list)     
+
+    def add_mp_link(self, obs1, obs2, is_rc1, is_rc2, other,link_type): 
+        if is_rc1:
+            self.connections_forward[(other,int(is_rc2),link_type)].append((obs1,obs2))
+        else:
+            self.connections_reverse[(other,int(is_rc2), link_type)].append((obs1,obs2))
+    def add_pe_link(self, obs1, obs2, is_rc1, is_rc2,other,link_type ):
+        if not is_rc1:
+            self.connections_forward[(other,1-is_rc2,link_type)].append((obs1,obs2))
+        else:
+            self.connections_reverse[(other,1-is_rc2, link_type)].append((obs1,obs2))
+
+    def make_connections_to_string(self,dict_,not_rc):
+        i_am = ''
+        for edge in dict_:
+            i_am += '{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n'.format(self.name, not_rc, edge[0], str(edge[1]), len(dict_[edge]),str(edge[2])) #replace 0 with gap
+            obs_first = '# '
+            obs_second = '# '
+            for link in dict_[edge]:
+                obs_first += str(link[0]) + ' '
+                obs_second += str(link[1]) + ' '
+                
+            i_am += obs_first+'\n' + obs_second +'\n'
+        return(i_am)
+
+    def __str__(self):
+        return self.make_connections_to_string(self.connections_forward,1) + self.make_connections_to_string(self.connections_reverse,0)
 
 
 
