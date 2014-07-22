@@ -2,10 +2,14 @@ import argparse
 import sys
 import os
 
+from random import choice
+
 from parser import fasta_parser,config_parser,link_parser
 import sequence
 import read_library
 from contig_graph import ContigGraph 
+from assembly_metrics import AssemblyMetrics
+import paths
 
 class GlobaInfo(object):
 	"""docstring for GlobaInfo"""
@@ -27,9 +31,9 @@ def read_in_contigs(config_params,contig_dict):
 def read_library_metrics(config_params, contigs):
 	lib_name =1
 	for lib_type, aligner, lib_loc in config_params.libs:
-		lib = read_library.Library(lib_type, aligner, lib_loc, os.path.join(config_params.output_path, 'lib_{0}_links.txt'.format(lib_name)))
+		lib = read_library.Library(lib_name, lib_type, aligner, lib_loc, os.path.join(config_params.output_path, 'lib_{0}_links.txt'.format(lib_name)))
 		lib.get_libary_metrics()
-		print contigs
+		#print contigs
 		lib.calculate_coverage(contigs)
 		lib_name += 1
 		besst.libs.append(lib)
@@ -42,8 +46,8 @@ def create_link_file(contigs):
 		lib.sorted_bam_to_link_file(contigs,besst.config_params.kmer_overlap)
 
 
-def create_graph():
-	G = ContigGraph()
+def create_graph(G):
+	
 
 
 	##
@@ -51,9 +55,9 @@ def create_graph():
 	for lib in besst.libs:
 		for (ctg1, orientation1, ctg2, orientation2, link_count, link_type, mean_obs) in  link_parser.get_links(lib.link_file):
 			G.add_edge(ctg1, orientation1, ctg2, orientation2, link_count, link_type, mean_obs, lib)
-	print G
-				#G.add_edge((subsequences[ seq1 ] ,orientation1),(subsequences[ seq2 ],orientation2),d=naive_gap,s=score.nr_links(link_count))
 
+				#G.add_edge((subsequences[ seq1 ] ,orientation1),(subsequences[ seq2 ],orientation2),d=naive_gap,s=score.nr_links(link_count))
+	#print G
 	G.remove_self_links()
 
 # 	return(G)
@@ -65,9 +69,45 @@ def main(args):
 	besst.config_params = params
 	contigs = {}
 	read_in_contigs(params,contigs)
+	metrics = AssemblyMetrics(contigs)
+	print metrics
 	read_library_metrics(params,contigs)
+	# for ctg in contigs:
+	# 	print contigs[ctg].name
+	# 	print contigs[ctg].length, contigs[ctg].coverage
+
 	create_link_file(contigs)
-	create_graph()
+	G = ContigGraph()
+	for ctg in contigs:
+		G.add_node(contigs[ctg].name)
+	create_graph(G)
+
+	print ('14__len__207', 0) in G
+	# filter out repeats temporarily
+
+	G.freeze_repeat_regions(contigs, besst)
+
+
+
+	print ('14__len__207', 0) in G
+	# graph_path = os.path.join(besst.config_params.output_path,'ctg_graph_w_repeats.png')	
+	# G.draw(graph_path,repeats)
+	graph_path = os.path.join(besst.config_params.output_path,'ctg_graph_no_repeats1.png')
+	# G.remove_nodes_from([repeat[0] for repeat in repeats])
+	G.draw(graph_path,G.nodes())
+	print len(G.edges()),len(G.nodes())
+
+	print G.edges()
+	path_factory = paths.PathFactory(G, contigs, 200 , 5, 100)
+	for path in path_factory.find_paths():
+		print path
+	#G.draw(graph_path,repeats)
+	#os.subprocess(['dot', '-Tps', '{0}'.format(graph_path),
+	#	'{0}'.format(os.path.join(besst.config_params.output_path,'ctg_graph.ps'))])
+
+	## do path searching
+
+
 	# G = read_input(args)
 	# score_list = compute_weighted_interval_solutions(G,args.overlap)
 	# make_trusted_paths(G,score_list)

@@ -37,19 +37,29 @@ def remove_outliers(ins_size_reads):
 
 class Library(object):
 	"""docstring for Library"""
-	def __init__(self, lib_type, aligner, bam_path, link_file):
+	def __init__(self, lib_name, lib_type, aligner, bam_path, link_file):
 		super(Library, self).__init__()
+		self.lib_name = lib_name
 		self.bam_path = bam_path
 		self.lib_type = lib_type
 		self.aligner = aligner
 		self.link_file = open(link_file,'r+')
 
+
 	def calculate_coverage(self, contigs):
 		bam_iter = bam_parser.BamParser(self.bam_path)
+
 		for read in bam_iter.aligned_reads():
-			contigs[bam_iter.bam_file.getrname(read.tid)].coverage += read.alen
+			contigs[bam_iter.bam_file.getrname(read.tid)].bases_aligned += read.alen
+
+		lib_cov = []
 		for contig in contigs.itervalues():
-			contig.coverage = contig.coverage/ float(contig.length)
+			contig.coverage += contig.bases_aligned / float(contig.length)
+			lib_cov.append(contig.bases_aligned / float(contig.length))
+			contig.bases_aligned = 0
+		
+		self.mean_coverage = sum([cov for cov in lib_cov]) / len(contigs)
+		self.sd_coverage = ( sum([ (cov - self.mean_coverage)**2 for cov in lib_cov]) / len(contigs) )**0.5
 
 	def get_libary_metrics(self):
 		ins_size_reads_innies = []
@@ -89,8 +99,9 @@ class Library(object):
 		for read1,read2 in bam_iter.unique_reads_on_different_references(self.aligner):
 			if read1.rnext != read2.tid or read2.rnext != read1.tid:
 				print read1,read2
-			index, ctg = min(enumerate([read1.tid,read2.tid]), key=itemgetter(1))
 
+			index, ctg = min(enumerate([read1.tid,read2.tid]), key=itemgetter(1))
+			#print bam_iter.bam_file.getrname(read1.tid),bam_iter.bam_file.getrname(read2.tid)
 			if self.lib_type == 'mp':
 				mp_obs1, mp_obs2 = bam_parser.get_mp_observation(read1, read2, bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read1.tid)],bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read2.tid)] )
 				pe_obs1, pe_obs2 = bam_parser.get_pe_observation(read1, read2, bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read1.tid)],bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read2.tid)] )
@@ -118,7 +129,7 @@ class Library(object):
 					print 'spurious link'
 
 			else:
-				obs1, obs2 = bam_parser.get_pe_observation(read1, read2, bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read1.tid)],bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read2.tid)])
+				obs1, obs2 = bam_parser.get_pe_observation(read1, read2, bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read1.tid)], bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read2.tid)])
 				if obs1 + obs2 < self.mean_innies + 4*self.sd_innies + kmer_overlap:
 					if index == 0:
 						edges[bam_iter.bam_file.getrname(ctg)].add_pe_link(obs1,obs2, read1.is_reverse, read2.is_reverse, bam_iter.bam_file.getrname(read2.tid),'pe') 
@@ -132,17 +143,19 @@ class Library(object):
 			if str(edges[connection]):
 				self.link_file.write(str(edges[connection]))
 		self.link_file.seek(0)
+		#self.link_file.read()
 				#print >> self.link_file, edges[connection]
 	
 
 	def __str__(self):
 		if self.lib_type == 'mp':
 			return 'Library type:{0}\nLibrary mean:{1} \
-			\nLibrary sd:{2}\nAligned with:{3}\nContamination rate:{4}\nContamination mean:{5}\n Contamination sd:{6}'.format(self.lib_type, 
+			\nLibrary sd:{2}\nAligned with:{3}\nContamination rate:{4}\nContamination mean:{5}\n Contamination sd:{6}\nLibrary mean cov:{7}\nLibrary sd cov:{8}'.format(self.lib_type, 
 				self.mean_outies,self.sd_outies,self.aligner,
-				self.contamine_rate, self.mean_innies,self.sd_innies)
+				self.contamine_rate, self.mean_innies,self.sd_innies,
+				self.mean_coverage,self.sd_coverage)
 		else:
-			return 'Library type:{0}\nLibrary mean:{1}\nLibrary sd:{2}\nAligned with:{3} '.format(self.lib_type, self.mean_innies,self.sd_innies,self.aligner)
+			return 'Library type:{0}\nLibrary mean:{1}\nLibrary sd:{2}\nAligned with:{3}\nLibrary mean cov:{4}\nLibrary sd cov:{5}'.format(self.lib_type, self.mean_innies,self.sd_innies,self.aligner,self.mean_coverage,self.sd_coverage)
 
 
 
@@ -165,20 +178,25 @@ class ContigConnections(object):
         else:
             self.connections_reverse[(other,1-is_rc2, link_type)].append((obs1,obs2))
 
+
     def make_connections_to_string(self,dict_,not_rc):
         i_am = ''
         for edge in dict_:
-            i_am += '{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n'.format(self.name, not_rc, edge[0], str(edge[1]), len(dict_[edge]),str(edge[2])) #replace 0 with gap
-            obs_first = '# '
-            obs_second = '# '
-            for link in dict_[edge]:
-                obs_first += str(link[0]) + ' '
-                obs_second += str(link[1]) + ' '
-                
-            i_am += obs_first+'\n' + obs_second +'\n'
+			#print self.name, not_rc, edge[0], str(edge[1]), len(dict_[edge]),str(edge[2])
+			i_am += '{0}\t{1}\t{2}\t{3}\t{4}\t{5}\n'.format(self.name, not_rc, edge[0], str(edge[1]), len(dict_[edge]),str(edge[2])) #replace 0 with gap
+			obs_first = '# '
+			obs_second = '# '
+			for link in dict_[edge]:
+			    obs_first += str(link[0]) + ' '
+			    obs_second += str(link[1]) + ' '
+			    
+			i_am += obs_first+'\n' + obs_second +'\n'
         return(i_am)
 
     def __str__(self):
+    	#print 'final tables: ', self.connections_forward, self.connections_reverse
+    	#print 'forward:', self.connections_forward
+    	#print 'reverse:', self.connections_reverse
         return self.make_connections_to_string(self.connections_forward,1) + self.make_connections_to_string(self.connections_reverse,0)
 
 

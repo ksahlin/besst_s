@@ -58,6 +58,10 @@ class Contig(object):
 		self.breakpoints = []
 		self.neighbors = {}
 		self.subsequences = []
+		self.bases_aligned = 0 
+
+	def __len__(self):
+		return len(self.sequence)
 
 	def add_subsequence(self,start,stop,seq):
 		self.subsequences.append((start,stop,seq))
