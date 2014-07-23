@@ -82,14 +82,10 @@ def main(args):
 		G.add_node(contigs[ctg].name)
 	create_graph(G)
 
-	print ('14__len__207', 0) in G
 	# filter out repeats temporarily
 
 	G.freeze_repeat_regions(contigs, besst)
 
-
-
-	print ('14__len__207', 0) in G
 	# graph_path = os.path.join(besst.config_params.output_path,'ctg_graph_w_repeats.png')	
 	# G.draw(graph_path,repeats)
 	graph_path = os.path.join(besst.config_params.output_path,'ctg_graph_no_repeats1.png')
@@ -97,10 +93,13 @@ def main(args):
 	G.draw(graph_path,G.nodes())
 	print len(G.edges()),len(G.nodes())
 
-	print G.edges()
-	path_factory = paths.PathFactory(G, contigs, 200 , 5, 100)
+	#print G[('50__len__471', 1)][ ('82__len__373', 0)]
+	print G.edges(data=True)
+	#print G.all_edges_between_two_nodes(('27__len__157', False), ('18__len__153', 1))
+	path_factory = paths.PathFactory(besst, G, contigs, 200 , 10, 100)
 	for path in path_factory.find_paths():
-		print path
+		
+		print path, path.score
 	#G.draw(graph_path,repeats)
 	#os.subprocess(['dot', '-Tps', '{0}'.format(graph_path),
 	#	'{0}'.format(os.path.join(besst.config_params.output_path,'ctg_graph.ps'))])

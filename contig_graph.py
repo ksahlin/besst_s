@@ -85,13 +85,15 @@ class ContigGraph(nx.MultiGraph):
 
 	def neighbors(self,node):
 		'''
-			Returns neighbors (from all libraries) of a node except itself as a neighbor. (If the contig node is linking to its other end)
+			Returns neighbors (from all libraries) of a node except itself as a neighbor.
+			(If the contig node is linking to its other end)
 		'''
 		return filter(lambda x: x[0] != node[0],super(ContigGraph, self).neighbors(node))
 
 	def lib_neighbors(self,node,lib):
 		'''
-			Returns neighbors (from all libraries) of a node except itself as a neighbor. (If the contig node is linking to its other end)
+			Returns neighbors (from a given library) of a node also including its
+			other end as a neighbor. (If the contig node is linking to its other end)
 		'''
 		lib_nbrs = []
 		for nbr in super(ContigGraph, self).neighbors(node):
@@ -100,6 +102,18 @@ class ContigGraph(nx.MultiGraph):
 				if self[node][nbr][lib_edge]['l'] == lib:
 					lib_nbrs.append(nbr)
 		return lib_nbrs
+
+	def all_edges_between_two_nodes(self,node1,node2):
+		edges =[]
+		for lib_edge in self[node1][node2]:
+			edges.append(self[node1][node2][lib_edge])
+		return edges
+
+	def effective_nr_of_links(self,lib_edge):
+		if lib_edge['t'] == 'mp_am' or lib_edge['t'] == 'pe_am':
+			return lib_edge['n'] * lib_edge['l'].contamine_rate
+		else:
+			return lib_edge['n']
 			#print self[node][nbr]
 		#return filter(lambda x: x[0] != node[0] and self[node][x]['l'].lib_name == lib, super(ContigGraph, self).neighbors(node))
 

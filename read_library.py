@@ -49,9 +49,12 @@ class Library(object):
 	def calculate_coverage(self, contigs):
 		bam_iter = bam_parser.BamParser(self.bam_path)
 
+		max_softclipped = 0
+
 		for read in bam_iter.aligned_reads():
 			contigs[bam_iter.bam_file.getrname(read.tid)].bases_aligned += read.alen
-
+			if read.rlen - read.qlen > max_softclipped:
+				self.max_softclipped = read.rlen - read.qlen
 		lib_cov = []
 		for contig in contigs.itervalues():
 			contig.coverage += contig.bases_aligned / float(contig.length)
@@ -64,6 +67,7 @@ class Library(object):
 	def get_libary_metrics(self):
 		ins_size_reads_innies = []
 		ins_size_reads_outies = []
+		read_length = []
 		for read_type,read in bam_parser.BamParser(self.bam_path).proper_aligned_unique_pairs(self.aligner,samples=1000000):
 			if self.lib_type == 'mp': 
 				if read_type == 'innie':
@@ -72,9 +76,9 @@ class Library(object):
 					ins_size_reads_outies.append(abs(read.tlen))
 			elif self.lib_type =='pe':
 				ins_size_reads_innies.append(abs(read.tlen))
-			#print read.tlen #, read
-		#self.mean =
-		#self.sd =
+
+			read_length.append(read.qlen)
+
 		self.mean_innies, self.sd_innies = remove_outliers(ins_size_reads_innies)
 		self.mean_outies, self.sd_outies = remove_outliers(ins_size_reads_outies)
 
@@ -89,6 +93,7 @@ class Library(object):
 		else:
 			self.contamine_rate = False
 
+		self.read_len = sum(read_length)/len(read_length)
 
 	def sorted_bam_to_link_file(self,contigs, kmer_overlap):
 		bam_iter = bam_parser.BamParser(self.bam_path)
