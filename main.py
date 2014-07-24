@@ -1,6 +1,7 @@
 import argparse
 import sys
 import os
+import pickle
 
 from random import choice
 
@@ -82,6 +83,9 @@ def main(args):
 		G.add_node(contigs[ctg].name)
 	create_graph(G)
 
+	pickle.dump( G.copy_no_edge_info(), open( "/tmp/save_graph.p", "wb" ) )
+
+
 	# filter out repeats temporarily
 
 	G.freeze_repeat_regions(contigs, besst)
@@ -91,15 +95,37 @@ def main(args):
 	graph_path = os.path.join(besst.config_params.output_path,'ctg_graph_no_repeats1.png')
 	# G.remove_nodes_from([repeat[0] for repeat in repeats])
 	G.draw(graph_path,G.nodes())
-	print len(G.edges()),len(G.nodes())
+	print len(G.edges()),G.size(),len(G.nodes())
 
 	#print G[('50__len__471', 1)][ ('82__len__373', 0)]
 	print G.edges(data=True)
 	#print G.all_edges_between_two_nodes(('27__len__157', False), ('18__len__153', 1))
 	path_factory = paths.PathFactory(besst, G, contigs, 200 , 10, 100)
+
+	# output paths in sorted score order
+	G_full = pickle.load( open( "/tmp/save_graph.p", "rb" ) )
+
+
+	repeat_paths = {}
+	for repeat_region, resolved in G.repeat_structure_iterator(G_full, contigs):
+		if resolved:
+			print 'resolved:', repeat_region
+			repeat_paths[(repeat_region[0],repeat_region[-1])] = repeat_region
+		else:
+			print 'Not resolved:' ,repeat_region
+
+			# check if repeats can be filled in otherwise, output the repeat structure by itself 
+			# as a separate scaffold
+			# recalculate positions of contigs
+			# make scaffold a la besst1 procedure
+
 	for path in path_factory.find_paths():
-		
 		print path, path.score
+		for repeat_ends in repeat_paths:
+			if repeat_ends in zip(path.path[:-1],path.path[1:]) or repeat_ends in zip(reversed(path.path[:-1]),reversed(path.path[1:])):
+				print 'heere__' 
+
+
 	#G.draw(graph_path,repeats)
 	#os.subprocess(['dot', '-Tps', '{0}'.format(graph_path),
 	#	'{0}'.format(os.path.join(besst.config_params.output_path,'ctg_graph.ps'))])

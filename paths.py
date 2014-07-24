@@ -136,6 +136,8 @@ class Path(object):
                 else:
                     pass
 
+    def get_positions(self):
+        pass
 
 
 class PathFactory(object):

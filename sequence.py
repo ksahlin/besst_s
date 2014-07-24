@@ -58,7 +58,8 @@ class Contig(object):
 		self.breakpoints = []
 		self.neighbors = {}
 		self.subsequences = []
-		self.bases_aligned = 0 
+		self.bases_aligned = 0
+		self.is_repeat = None 
 
 	def __len__(self):
 		return len(self.sequence)

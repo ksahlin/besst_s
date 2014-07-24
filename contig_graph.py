@@ -5,6 +5,9 @@ import networkx as nx
 import matplotlib
 matplotlib.use('Agg')
 
+import paths
+
+
 
 def sum_of_all_nbrs_exept_longest(nbrs,contigs):
 	lengths = sorted (map(lambda x: contigs[x[0]].length, nbrs))
@@ -20,11 +23,17 @@ class ContigGraph(nx.MultiGraph):
 
 	def __str__(self):
 		graph_repr = ''
-		nodes_visited =set()
-		for edge in self.edges(data=True):
-			graph_repr += str(edge) +'\n'
+		# nodes_visited =set()
+		# for edge in self.edges(data=True):
+		# 	graph_repr += str(edge) +'\n'
 
 		return(graph_repr)
+
+	def copy_no_edge_info(self):
+		G_copy = nx.MultiGraph()
+		G_copy.add_edges_from([edge for edge in self.edges_iter() ])
+		return G_copy
+
 
 	def other_end(self,node):
 		if node[1] == 0:
@@ -132,12 +141,13 @@ class ContigGraph(nx.MultiGraph):
 				if len(self.lib_neighbors(node, lib)) > 1:
 					if lib.lib_type == 'pe':
 						if sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs) > lib.mean_innies + 4*lib.sd_innies + 2*besst.config_params.kmer_overlap:
-							
-							#Only small repeats in this data set? look for coverage?
+							contigs[node[0]].is_repeat = True
 							yield node
 					elif lib.lib_type == 'mp':
 						if sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs) > lib.mean_outies + 4*lib.sd_outies + 2*besst.config_params.kmer_overlap:
+							contigs[node[0]].is_repeat = True
 							yield node 
+
 
 	def freeze_repeat_regions(self, contigs, besst):
 		"""
@@ -161,4 +171,71 @@ class ContigGraph(nx.MultiGraph):
 			#self.repeat_regions[repeat[0]].draw(graph_path, self.repeat_regions[repeat[0]].nodes())
 
 		self.remove_nodes_from([repeat for repeat in self.repeat_regions])
+
+	def get_contigs_flanking_a_repeat_structure(self, G_full, repeat_structure_left_end,repeat_structure_right_end):
+		"""
+			Parses the neighborhood region of one repeat R (or several repeats in a row e.g. R_1,R_2) 
+			and looks for links spanning over it (them).
+			If there are links between any two neighbors A and B from a given library, it will store
+			the region ARB as a triplet. This triplet is found by serching for shortest paths between
+			the two nodes representing R. THere might be several different triplets for a repeat. 
+		"""
+		try:
+			for path in nx.all_shortest_paths(G_full, repeat_structure_left_end, repeat_structure_right_end):
+				# return the flanking contig ends of a repeat (only if flanks are directly connected )
+				if len(path) == 4:
+					#print path[1],path[-2]
+					yield path[1], path[-2]
+			else:
+				yield None,None
+		except nx.exception.NetworkXNoPath:
+			#print 'no path, i.e. repeat structure cannot be bridged over'
+			yield None,None
+
+	def repeat_structure_iterator(self, G_full, contigs):
+		"""
+			Assemble complicated repeat regions using an iterative buildup of assembling the closest 
+			neighbors of a repeat. This iterative procedure is continued until both endpoints are classified as
+			non repeats. The "endpoints, as mentioned here is always connected in the original contig graph. Oherwise,
+			we would have no information of joining the two endpoints.
+		"""
+		queue = paths.MyQUEUE()
+		for repeat in self.repeat_regions:
+			queue.enqueue([(repeat,0),(repeat,1)])
+
+		while not queue.IsEmpty():
+			repeat_structure = queue.dequeue()
+			repeat_structure_left_end,repeat_structure_right_end = repeat_structure[0], repeat_structure[-1]
+			#for item in self.get_contigs_flanking_a_repeat_structure(G_full, repeat_structure_left_end, repeat_structure_right_end):
+			#		print item
+
+			for flank1,flank2 in self.get_contigs_flanking_a_repeat_structure(G_full, repeat_structure_left_end, repeat_structure_right_end):
+				if flank1 == None and flank2 == None:
+					# return unsuccessful repats here
+					yield repeat_structure , 0
+					continue
+				new_structure = [flank1] + repeat_structure + [flank2]
+
+				if not contigs[flank1[0]].is_repeat and not contigs[flank2[0]].is_repeat:
+					# bothe ends are not repeats, continue building structure
+					yield  new_structure, 1
+
+				elif contigs[flank1[0]].is_repeat and not contigs[flank2[0]].is_repeat:
+					# left end is still a repeat
+					new_structure = [flank1] + repeat_structure 
+					queue.enqueue(new_structure)
+
+				elif not contigs[flank1[0]].is_repeat and contigs[flank2[0]].is_repeat:
+					#right end is still a repeat, continue building structure
+					new_structure =  repeat_structure + [flank2]
+					queue.enqueue(new_structure)
+
+				else:
+					# Both eds are still repeats,  continue building structure
+					queue.enqueue(new_structure)
+
+
+
+
+
 
