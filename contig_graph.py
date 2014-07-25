@@ -30,7 +30,10 @@ class ContigGraph(nx.MultiGraph):
 		return(graph_repr)
 
 	def copy_no_edge_info(self):
-		G_copy = nx.MultiGraph()
+		G_copy = ContigGraph()
+		#for edge in self.edges_iter():
+			#print 'hgbfdv',edge
+			#G_copy.add_edge(edge[0],edge[1])
 		G_copy.add_edges_from([edge for edge in self.edges_iter() ])
 		return G_copy
 
@@ -69,7 +72,7 @@ class ContigGraph(nx.MultiGraph):
 		for node in nodes:
 			super(ContigGraph, self).remove_nodes_from([(node,True),(node,False)])
 
-	def add_edge(self,node1, orientation1, node2, orientation2, link_count, link_type, mean_obs,lib):
+	def add_link_edge(self,node1, orientation1, node2, orientation2, link_count, link_type, mean_obs,lib):
 		# #print self.neighbors((node2,orientation2))
 		# #print self[node1] #dir(super(ContigGraph, self))
 		# if  (node2,orientation2) in self and (node1,orientation1) in self.neighbors((node2,orientation2)):
@@ -214,27 +217,49 @@ class ContigGraph(nx.MultiGraph):
 					# return unsuccessful repats here
 					yield repeat_structure , 0
 					continue
-				new_structure = [flank1] + repeat_structure + [flank2]
 
 				if not contigs[flank1[0]].is_repeat and not contigs[flank2[0]].is_repeat:
-					# bothe ends are not repeats, continue building structure
-					yield  new_structure, 1
+					# bothe ends are not repeats
+					# finally, check that the repeat structure is not spuriously build by
+					# looking if at least one of the unique ends link to all of the repeat
+					# contigs
+
+					if self.good_repeat_structure(G_full, flank1, flank2, repeat_structure):
+						print 'lolsss'
+						new_structure = [flank1] + repeat_structure + [flank2]
+						yield  new_structure, 1
+					else:
+						print 'spurious repeat structure'
 
 				elif contigs[flank1[0]].is_repeat and not contigs[flank2[0]].is_repeat:
-					# left end is still a repeat
-					new_structure = [flank1] + repeat_structure 
+					# left end is still a repeat, continue building structure
+					new_structure = [self.other_end(flank1), flank1] + repeat_structure 
 					queue.enqueue(new_structure)
 
 				elif not contigs[flank1[0]].is_repeat and contigs[flank2[0]].is_repeat:
 					#right end is still a repeat, continue building structure
-					new_structure =  repeat_structure + [flank2]
+					new_structure =  repeat_structure + [flank2,self.other_end(flank2)]
 					queue.enqueue(new_structure)
 
 				else:
 					# Both eds are still repeats,  continue building structure
+					new_structure = [self.other_end(flank1), flank1] + repeat_structure + [flank2,self.other_end(flank2)]
 					queue.enqueue(new_structure)
 
 
+	def good_repeat_structure(self, G_full, unique_ctg1, unique_ctg2,repeat_structure):
+		left_links = map(lambda x: 1 if x in G_full.neighbors(unique_ctg1) else 0, repeat_structure[::2])
+		right_links = map(lambda x: 1 if x in G_full.neighbors(unique_ctg2) else 0, repeat_structure[1::2])
+		is_linked = []
+		print left_links,right_links
+		for l,r in zip(left_links, right_links):
+			if l+r > 0:
+				is_linked.append(True)
+			else:
+				is_linked.append(False)
+
+		return(all(is_linked))
+		
 
 
 

@@ -94,17 +94,17 @@ class Path(object):
 
 
         optimal_gap_solution = [0]*( len(self.path)/2)
-        print self.path
+        #print self.path
         for v in problem.variables():
             try:
                 optimal_gap_solution[int( v.name)] = v.varValue
-                print v.name, "=", v.varValue
+                #print v.name, "=", v.varValue
             except ValueError:
                 #print v.name, "=", v.varValue,
                 pass
 
         self.objective = value(problem.objective)
-        print 'hej:',self.objective,optimal_gap_solution
+        #print 'hej:',self.objective,optimal_gap_solution
         return optimal_gap_solution       
 
     def find_supporting_links(self,graph):
@@ -139,6 +139,15 @@ class Path(object):
     def get_positions(self):
         pass
 
+    def add_repeat_region(self, flank1,flank2,repeats):
+        pos1 = self.path.index(flank1)
+        pos2 = self.path.index(flank2)
+        assert abs(pos1-pos2) == 1
+        if pos1 < pos2:
+            self.path[pos1+1:pos1+1] = repeats
+        else:
+            self.path[pos2+1:pos2+1] = repeats[::-1]
+
 
 class PathFactory(object):
     """docstring for PathFactory"""
@@ -165,7 +174,7 @@ class PathFactory(object):
                 p = Path(self.besst, path, self.contigs)
                 p.score_path(self.graph)
                 p.LP_solve_gaps()
-                print p.score
+                #print p.score
                 #if p.good_link_ratio > 1:
                 self.paths.append(p) 
             self.already_visited.add(start)

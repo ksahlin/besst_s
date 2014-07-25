@@ -19,7 +19,7 @@ class ConfigParams(object):
             		sys.stderr.write('Contig path given in config file does not exist. You gave:\n {0}\n'.format(line.split()[1]))
             		sys.exit()
                 self.contig_file ,self.kmer_overlap = open(line.split()[1],'r'), int(line.split()[2])
-            
+
             
             elif line[:1] == "3":
                 input_lib = line.split()
@@ -30,3 +30,5 @@ class ConfigParams(object):
                 lib = (lib_type, aligner, lib_location)
                 self.libs.append(lib)
 
+            elif line[:1] == "4":
+            	self.min_links = int(line.split()[1])

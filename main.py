@@ -47,15 +47,19 @@ def create_link_file(contigs):
 		lib.sorted_bam_to_link_file(contigs,besst.config_params.kmer_overlap)
 
 
-def create_graph(G):
-	
+def create_graph(G,contigs):
 
+	##
+	# create nodes
 
+	for ctg in contigs:
+		G.add_node(contigs[ctg].name)
 	##
 	# Create edges
 	for lib in besst.libs:
 		for (ctg1, orientation1, ctg2, orientation2, link_count, link_type, mean_obs) in  link_parser.get_links(lib.link_file):
-			G.add_edge(ctg1, orientation1, ctg2, orientation2, link_count, link_type, mean_obs, lib)
+			if link_count >= besst.config_params.min_links:
+				G.add_link_edge(ctg1, orientation1, ctg2, orientation2, link_count, link_type, mean_obs, lib)
 
 				#G.add_edge((subsequences[ seq1 ] ,orientation1),(subsequences[ seq2 ],orientation2),d=naive_gap,s=score.nr_links(link_count))
 	#print G
@@ -79,12 +83,12 @@ def main(args):
 
 	create_link_file(contigs)
 	G = ContigGraph()
-	for ctg in contigs:
-		G.add_node(contigs[ctg].name)
-	create_graph(G)
+	create_graph(G,contigs)
 
 	pickle.dump( G.copy_no_edge_info(), open( "/tmp/save_graph.p", "wb" ) )
 
+	print G[('19__len__201', 0)]
+	print G[('19__len__201', 1)]
 
 	# filter out repeats temporarily
 
@@ -98,7 +102,7 @@ def main(args):
 	print len(G.edges()),G.size(),len(G.nodes())
 
 	#print G[('50__len__471', 1)][ ('82__len__373', 0)]
-	print G.edges(data=True)
+	#print G.edges(data=True)
 	#print G.all_edges_between_two_nodes(('27__len__157', False), ('18__len__153', 1))
 	path_factory = paths.PathFactory(besst, G, contigs, 200 , 10, 100)
 
@@ -107,23 +111,35 @@ def main(args):
 
 
 	repeat_paths = {}
+	tmp_file = open('/tmp/repeats.txt', 'w')
 	for repeat_region, resolved in G.repeat_structure_iterator(G_full, contigs):
 		if resolved:
-			print 'resolved:', repeat_region
+			print >> tmp_file, 'resolved:', repeat_region
 			repeat_paths[(repeat_region[0],repeat_region[-1])] = repeat_region
 		else:
-			print 'Not resolved:' ,repeat_region
+			print >> tmp_file, 'Not resolved:' ,repeat_region
 
 			# check if repeats can be filled in otherwise, output the repeat structure by itself 
 			# as a separate scaffold
 			# recalculate positions of contigs
 			# make scaffold a la besst1 procedure
 
+	G = ContigGraph()
+	create_graph(G,contigs)
+
+
 	for path in path_factory.find_paths():
-		print path, path.score
+		print path, path.score, path.bad_links, path.good_links
 		for repeat_ends in repeat_paths:
 			if repeat_ends in zip(path.path[:-1],path.path[1:]) or repeat_ends in zip(reversed(path.path[:-1]),reversed(path.path[1:])):
-				print 'heere__' 
+				print 'heere__'
+				print repeat_paths[repeat_ends]
+				path.add_repeat_region(repeat_ends[0],repeat_ends[1],repeat_paths[repeat_ends][1:-1])
+				path.find_supporting_links(G)
+				path.LP_solve_gaps()
+				print 'after:'
+				print path, path.score, path.bad_links, path.good_links
+
 
 
 	#G.draw(graph_path,repeats)

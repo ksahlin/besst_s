@@ -95,7 +95,11 @@ class BamParser(object):
             for read in self.bam_file:
                 if is_unique_read_link(read):
                     if read.qname in read_pairs:
-                        yield read, read_pairs[read.qname]
+                        read2 = read_pairs[read.qname]
+                        if read.tid == read2.tid:
+                            yield read, read_pairs[read.qname]
+                        else: 
+                            pass
                         del read_pairs[read.qname]
                     else:
                         read_pairs[read.qname] = read
