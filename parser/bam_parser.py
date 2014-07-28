@@ -83,26 +83,32 @@ class BamParser(object):
 
                     if nr_samples >= samples:
                         break
- 
+        self.bam_file.seek(0)
+
     def aligned_reads(self):
         for read in self.bam_file:
             if not read.is_unmapped:
                 yield read 
+        self.bam_file.seek(0)
 
     def unique_reads_on_different_references(self, aligner):
         read_pairs = {}
         if aligner == 'bwa_mem':
             for read in self.bam_file:
                 if is_unique_read_link(read):
-                    if read.qname in read_pairs:
-                        read2 = read_pairs[read.qname]
-                        if read.tid == read2.tid:
-                            yield read, read_pairs[read.qname]
-                        else: 
-                            pass
-                        del read_pairs[read.qname]
+                    #tmp for tests:
+                    #print read.qname[:-1]
+                    #print read_pairs
+                    if read.qname[:-1] in read_pairs:
+                        #print 'lol'
+                        #read2 = read_pairs[read.qname]
+                        #if read.tid == read2.tid:    
+                        yield read, read_pairs[read.qname[:-1]]
+                        #else: 
+                        #    pass
+                        del read_pairs[read.qname[:-1]]
                     else:
-                        read_pairs[read.qname] = read
+                        read_pairs[read.qname[:-1]] = read
                     
 
 
@@ -110,7 +116,7 @@ class BamParser(object):
             pass
         elif aligner == 'bowtie':
             pass
-
+        self.bam_file.seek(0)
 
     def long_reads_for_coverage(self):
         pass

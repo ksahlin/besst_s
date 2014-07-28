@@ -20,3 +20,5 @@ def get_links(link_file):
             obs_list2 = map(lambda x: int(x), next_3_lines[2][1:].split())  
             mean_obs = sum(map(lambda x: x[0]+x[1], zip(obs_list1,obs_list2)) )/float(nr_links)  
             yield (ctg1, int(o1), ctg2, int(o2), int(nr_links), link_type, mean_obs)
+
+    link_file.seek(0)

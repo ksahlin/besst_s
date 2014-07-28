@@ -7,9 +7,12 @@ def get_contigs(contig_file):
             accession = line[1:].strip().split()[0]
             k += 1
         elif line[0] == '>':
-        	yield accession, sequence
-        	sequence = ''
-        	accession = line[1:].strip().split()[0]
+            if len(sequence) > 0:
+        	   yield accession, sequence
+            sequence = ''
+            accession = line[1:].strip().split()[0]
         else:
             sequence += line.strip()
-    yield accession, sequence
+    
+    if len(sequence) > 0:
+        yield accession, sequence

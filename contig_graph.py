@@ -144,6 +144,10 @@ class ContigGraph(nx.MultiGraph):
 				if len(self.lib_neighbors(node, lib)) > 1:
 					if lib.lib_type == 'pe':
 						if sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs) > lib.mean_innies + 4*lib.sd_innies + 2*besst.config_params.kmer_overlap:
+							print sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs)
+							for nbr in self.lib_neighbors(node, lib):
+								print 'info:',self[node][nbr]
+							#print 'nbrs:',
 							contigs[node[0]].is_repeat = True
 							yield node
 					elif lib.lib_type == 'mp':

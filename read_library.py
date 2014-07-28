@@ -1,4 +1,4 @@
-import sys
+import os, sys
 from operator import itemgetter
 from collections import defaultdict
 
@@ -43,6 +43,8 @@ class Library(object):
 		self.bam_path = bam_path
 		self.lib_type = lib_type
 		self.aligner = aligner
+		open(link_file,'w').close()
+		#os.utime(link_file, None)
 		self.link_file = open(link_file,'r+')
 
 
@@ -55,6 +57,7 @@ class Library(object):
 			contigs[bam_iter.bam_file.getrname(read.tid)].bases_aligned += read.alen
 			if read.rlen - read.qlen > max_softclipped:
 				self.max_softclipped = read.rlen - read.qlen
+
 		lib_cov = []
 		for contig in contigs.itervalues():
 			contig.coverage += contig.bases_aligned / float(contig.length)
@@ -104,7 +107,7 @@ class Library(object):
 		for read1,read2 in bam_iter.unique_reads_on_different_references(self.aligner):
 			if read1.rnext != read2.tid or read2.rnext != read1.tid:
 				print read1,read2
-
+			#print read1,read2
 			index, ctg = min(enumerate([read1.tid,read2.tid]), key=itemgetter(1))
 			#print bam_iter.bam_file.getrname(read1.tid),bam_iter.bam_file.getrname(read2.tid)
 			if self.lib_type == 'mp':

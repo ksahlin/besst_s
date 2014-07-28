@@ -20,7 +20,7 @@ class LinkObservation(object):
         elif self.link_type == 'mp_am' or self.link_type == 'mp':
             self.exp_mean_gapest   =   self.mean_obs + GC.GapEstimator(self.link_lib.mean_outies, self.link_lib.sd_outies, self.link_lib.read_len - self.link_lib.max_softclipped, self.mean_obs, contig1.length, contig2.length)
         
-        print 'mean obs:',self.mean_obs, 'nr_links:',self.nr_effective_links, 'gapest:', self.exp_mean_gapest, 'read_len:',self.link_lib.read_len
+        #print 'mean obs:',self.mean_obs, 'nr_links:',self.nr_effective_links, 'gapest:', self.exp_mean_gapest, 'read_len:',self.link_lib.read_len
 
 
 class Path(object):
@@ -29,8 +29,6 @@ class Path(object):
         super(Path, self).__init__()
         self.besst = besst
         self.path = path
-        self.good_links = 0 
-        self.bad_links = 0
         self.contigs = contigs
         self.observations = {}
         self.contig_lengths = []
@@ -45,15 +43,15 @@ class Path(object):
             return(False)
 
     def score_path(self,graph):
-        self.find_supporting_links(graph)
-        self.LP_solve_gaps()
+        #self.find_supporting_links(graph)
+        #self.LP_solve_gaps()
         try:
             self.good_link_ratio = self.good_links / float(self.bad_links)
         except ZeroDivisionError:
             self.good_link_ratio = self.good_links
-
-        avg_discrepancy = self.objective / float(self.good_links)
-        self.score = self.good_link_ratio * 1 / (1 + avg_discrepancy)
+        self.score = self.good_link_ratio
+        #avg_discrepancy = self.objective / float(self.good_links)
+        #self.score = self.good_link_ratio * 1 / (1 + avg_discrepancy)
 
     def LP_solve_gaps(self):
 
@@ -94,9 +92,11 @@ class Path(object):
 
 
         optimal_gap_solution = [0]*( len(self.path)/2)
+        self.gaps = {}
         #print self.path
         for v in problem.variables():
             try:
+                self.gaps[(self.path[int(v.name)*2], self.path[int(v.name)*2+1]) ] = v.varValue #self.path.index(ctg)/2 , self.path.index(nbr)/2 + 1
                 optimal_gap_solution[int( v.name)] = v.varValue
                 #print v.name, "=", v.varValue
             except ValueError:
@@ -104,10 +104,12 @@ class Path(object):
                 pass
 
         self.objective = value(problem.objective)
-        #print 'hej:',self.objective,optimal_gap_solution
+        #print 'hej:',self.gaps #self.objective,optimal_gap_solution
         return optimal_gap_solution       
 
     def find_supporting_links(self,graph):
+        self.good_links = 0 
+        self.bad_links = 0
         path_forward, path_backwards = [], []
         for i, ctg in enumerate(self.path):
             path_forward.append(ctg) if i %2 ==0 else path_backwards.append(ctg)
@@ -119,6 +121,7 @@ class Path(object):
                 if nbr not in path_backwards or self.path.index(nbr) < self.path.index(ctg):
                     for edge in graph.all_edges_between_two_nodes(ctg,nbr):
                         self.bad_links += edge['n']
+                        
                 else:
                     for edge in graph.all_edges_between_two_nodes(ctg,nbr):
                         self.good_links += edge['n']
@@ -136,8 +139,6 @@ class Path(object):
                 else:
                     pass
 
-    def get_positions(self):
-        pass
 
     def add_repeat_region(self, flank1,flank2,repeats):
         pos1 = self.path.index(flank1)
@@ -170,13 +171,24 @@ class PathFactory(object):
         self.already_visited = set()
         for start in self.cut_vertices:
             self.forbidden = set([self.graph.other_end(start)])
+            print 'treating contig:', start
+            contig_paths = []
             for path in self.BFS(start):
                 p = Path(self.besst, path, self.contigs)
+                #p.score_path(self.graph)
+                #self.paths.append(p)
+                p.find_supporting_links(self.graph)
                 p.score_path(self.graph)
-                p.LP_solve_gaps()
-                #print p.score
-                #if p.good_link_ratio > 1:
-                self.paths.append(p) 
+                contig_paths.append(p)
+            sorted_paths = sorted(contig_paths, reverse=True)
+            try:
+                high_score_path = sorted_paths[0]
+            except:
+                continue
+            high_score_path.LP_solve_gaps()
+
+            #print high_score_path.good_links,high_score_path.bad_links
+            self.paths.append(high_score_path) 
             self.already_visited.add(start)
         return sorted(self.paths, reverse=True)
 
