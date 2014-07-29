@@ -127,9 +127,18 @@ class Scaffold(object):
 
 		return fasta
 
-class SplitSequences(object):
-	"""docstring for SplitSequences"""
-	def __init__(self, arg):
-		super(SplitSequences, self).__init__()
-		self.arg = arg
+class ScaffoldContainer(object):
+	"""docstring for ScaffoldContainer"""
+	def __init__(self):
+		super(ScaffoldContainer, self).__init__()
+		self.scaffolds = {}
+
+	def add_scaffold(self,scaf_object):
+		self.scaffolds[scaf_object.name] = scaf_object
+
+	def merge_contig_paths(self,path1,path2):
+		"""
+			Takes two 
+		"""
+		
 		

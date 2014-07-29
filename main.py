@@ -108,7 +108,7 @@ def main(args):
 	#print G[('50__len__471', 1)][ ('82__len__373', 0)]
 	#print G.edges(data=True)
 	#print G.all_edges_between_two_nodes(('27__len__157', False), ('18__len__153', 1))
-	path_factory = paths.PathFactory(besst, G, contigs, 200 , 30, 100000)
+	path_factory = paths.PathFactory(besst, G, contigs, 1000 , 30, 100000)
 
 	# output paths in sorted score order
 	G_full = pickle.load( open( "/tmp/save_graph.p", "rb" ) )
@@ -132,10 +132,11 @@ def main(args):
 	create_graph(G,contigs)
 
 	
-	tmp_paths = []
+	#tmp_paths = []
 	#print G.edges(data=True)
 	for path in path_factory.find_paths():
 		print path, path.score, path.good_links,path.bad_links
+
 		# for repeat_ends in repeat_paths:
 		# 	if repeat_ends in zip(path.path[:-1],path.path[1:]) or repeat_ends in zip(reversed(path.path[:-1]),reversed(path.path[1:])):
 		# 		print 'heere__'
@@ -148,7 +149,8 @@ def main(args):
 		# 		print path, path.score, path.good_links, path.bad_links, 'lool'
 		# 		print path.gaps
 				#
-		tmp_paths.append(path)
+		path_factory.add_subpath(path)
+		#tmp_paths.append(path)
 
 		##
 		# merge paths here
@@ -165,12 +167,17 @@ def main(args):
 	# Make fasta sequences for all paths
 	scaffold_index = 1
 	scaffold_file = open(os.path.join(besst.config_params.output_path,'scaffolds.fa'), 'w')
-	for path in tmp_paths:#path_factory.final_paths
+	# for path in tmp_paths:#path_factory.final_paths
+	# 	s = sequence.Scaffold(scaffold_index)
+	# 	scaffold_index += 1
+	# 	scaf = s.make_fasta_string(path,contigs)
+	# 	print >> scaffold_file, scaf
+
+	for path in path_factory.path_ends.itervalues():#path_factory.final_paths
 		s = sequence.Scaffold(scaffold_index)
 		scaffold_index += 1
 		scaf = s.make_fasta_string(path,contigs)
 		print >> scaffold_file, scaf
-
 
 
 

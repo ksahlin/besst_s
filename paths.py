@@ -1,6 +1,13 @@
 from pulp import *
 from mathstats.normaldist.truncatedskewed import param_est as GC
 
+
+def other_end(ctg_end):
+    if ctg_end[1]:
+        return (ctg_end[0],0)
+    else:
+        return (ctg_end[0],1)
+
 class LinkObservation(object):
     """docstring for LinkObservation"""
     def __init__(self, link_lib, nr_effective_links,mean_obs,from_ctg_index,to_ctg_index, link_type):
@@ -97,6 +104,7 @@ class Path(object):
         for v in problem.variables():
             try:
                 self.gaps[(self.path[int(v.name)*2], self.path[int(v.name)*2+1]) ] = v.varValue #self.path.index(ctg)/2 , self.path.index(nbr)/2 + 1
+                self.gaps[(self.path[int(v.name)*2+1], self.path[int(v.name)*2]) ] = v.varValue
                 optimal_gap_solution[int( v.name)] = v.varValue
                 #print v.name, "=", v.varValue
             except ValueError:
@@ -160,6 +168,10 @@ class PathFactory(object):
         self.max_depth = max_depth
         self.iter_tresh = iter_tresh
         self.cut_vertices = set()
+
+        self.path_ends = {}
+        self.already_merged = set()
+
         for ctg in filter(lambda ctg: contigs[ctg].length > cut_length and (contigs[ctg].name,0) in self.graph, contigs):
             self.cut_vertices.add((contigs[ctg].name, 0))
             self.cut_vertices.add((contigs[ctg].name,1))
@@ -220,7 +232,94 @@ class PathFactory(object):
                     new_path = []
                     new_path = tmp_path + [link_node, self.graph.other_end(link_node)]
                     self.queue.enqueue(new_path)
-    
+   
+
+    def merge_contig_paths(self,path1,path2):
+        """
+            Takes two path path1 and path2 and merges them
+        """
+
+        ##
+        # dectect in what ends they should be merged
+
+        ## rare circular case
+        if path1.path[0] == other_end(path2.path[0]) and  path1.path[-1] == other_end(path2.path[-1]) \
+        or path1.path[-1] == other_end(path2.path[0]) and  path1.path[0] == other_end(path2.path[-1]):
+            print ' circular paths! Skipping merging'
+            return 0
+
+        elif path1.path[-1] == other_end(path2.path[0]) :
+            p = Path(self.besst,path1.path + path2.path, self.contigs )
+            p.gaps = dict(path1.gaps.items() + path2.gaps.items())
+            return p
+               
+        elif path1.path[-1] == other_end(path2.path[-1]):
+            p = Path(self.besst,path1.path + [i for i in reversed(path2.path)], self.contigs )
+            p.gaps = dict(path1.gaps.items() + path2.gaps.items())
+            return p       
+
+
+        elif path1.path[0] == other_end(path2.path[0]):
+            p = Path(self.besst, [i for i in reversed(path1.path)] + path2.path, self.contigs )
+            p.gaps = dict(path1.gaps.items() + path2.gaps.items())
+            return p            
+
+        elif path1.path[0] == other_end(path2.path[-1]):
+            p = Path(self.besst, path2.path + path1.path, self.contigs )
+            p.gaps = dict(path1.gaps.items() + path2.gaps.items()) 
+            return p           
+
+        else:
+
+            print 'NOOOO'
+            return 0
+
+
+    def add_subpath(self,path):
+
+        ##
+        # There exists a unique (internal) contig that is included in another path already
+
+        for node in path.path:
+            if not self.contigs[node[0]].is_repeat and node in self.already_merged:
+                print 'Unique ctg already treated'
+                return
+
+
+
+        ##
+        # look if endpoint in current path is the other flank of a contig that is 
+        # a flank of another path that has been treated previously. If this is the case,
+        # merge.
+
+        if other_end(path.path[0]) in self.path_ends and other_end(path.path[-1]) in self.path_ends:
+             new_path_temp = self.merge_contig_paths(path, self.path_ends[other_end(path.path[0])])
+             new_path = self.merge_contig_paths(new_path_temp, self.path_ends[other_end(path.path[-1])])
+             del self.path_ends[other_end(path.path[0])]
+             del self.path_ends[other_end(path.path[-1])]
+
+        elif other_end(path.path[0]) in self.path_ends:
+             new_path = self.merge_contig_paths(path, self.path_ends[other_end(path.path[0])])
+             del self.path_ends[other_end(path.path[0])]
+
+        elif other_end(path.path[-1]) in self.path_ends:
+            new_path = self.merge_contig_paths(path, self.path_ends[other_end(path.path[-1])])
+            del self.path_ends[other_end(path.path[-1])]
+
+        else:
+            new_path = path
+
+        ##
+        # Add all treated unique internal contigs to already visited
+        for node in new_path.path[1:-1]:
+            if not self.contigs[node[0]].is_repeat:
+                self.already_merged.add(node)     
+
+        ##
+        # Add the endpoints of new_path path to dictionary of path ends.
+        self.path_ends[ new_path.path[0] ] = new_path
+        self.path_ends[ new_path.path[-1] ] = new_path
+
 
 class MyQUEUE(object): # just an implementation of a queue
     

@@ -39,10 +39,10 @@ class ContigGraph(nx.MultiGraph):
 
 
 	def other_end(self,node):
-		if node[1] == 0:
-			return (node[0],1)
-		else:
+		if node[1]:
 			return (node[0],0)
+		else:
+			return (node[0],1)
 
 	def draw(self, path, nodes):
 		nx.draw(self,nodelist=nodes)
