@@ -22,6 +22,18 @@ class GlobaInfo(object):
 	def __str__(self):
 		return
 
+	def get_cut_vertex_cutoff(self):
+		cutoff = 0
+		for lib in self.libs:
+			if lib.lib_type == 'mp':
+				if cutoff <= lib.mean_outies + 3*lib.sd_outies:
+					cutoff = lib.mean_outies + 3*lib.sd_outies
+
+			elif lib.lib_type == 'pe':
+				if cutoff <= lib.mean_innies + 3*lib.sd_innies:
+					cutoff = lib.mean_innies + 3*lib.sd_innies	
+		self.cutoff = cutoff		
+
 besst = GlobaInfo()
 
 def read_in_contigs(config_params,contig_dict):
@@ -108,7 +120,10 @@ def main(args):
 	#print G[('50__len__471', 1)][ ('82__len__373', 0)]
 	#print G.edges(data=True)
 	#print G.all_edges_between_two_nodes(('27__len__157', False), ('18__len__153', 1))
-	path_factory = paths.PathFactory(besst, G, contigs, 1000 , 30, 100000)
+
+
+	besst.get_cut_vertex_cutoff()
+	path_factory = paths.PathFactory(besst, G, contigs, 200 , 30, 100000)
 
 	# output paths in sorted score order
 	G_full = pickle.load( open( "/tmp/save_graph.p", "rb" ) )
@@ -173,13 +188,28 @@ def main(args):
 	# 	scaf = s.make_fasta_string(path,contigs)
 	# 	print >> scaffold_file, scaf
 
+	already_printed = set()
 	for path in path_factory.path_ends.itervalues():#path_factory.final_paths
-		s = sequence.Scaffold(scaffold_index)
+		end1 = path.path[0][0]
+		end2 = path.path[-1][0]
+		
+		if end1 in already_printed or end2 in already_printed:
+			continue
+		
+		s = sequence.Scaffold('s'+str(scaffold_index))
 		scaffold_index += 1
-		scaf = s.make_fasta_string(path,contigs)
+		scaf = s.make_fasta_string(path,contigs,besst.config_params.kmer_overlap)
 		print >> scaffold_file, scaf
 
+		already_printed.add(end1)
+		already_printed.add(end2)
 
+
+
+	for acc, contig_object in contigs.iteritems():
+		print acc, contig_object.is_outputted
+		if not contig_object.is_outputted: 
+			print >> scaffold_file,'>{0}\n{1}'.format(acc,contig_object.sequence)			
 
 	#G.draw(graph_path,repeats)
 	#os.subprocess(['dot', '-Tps', '{0}'.format(graph_path),

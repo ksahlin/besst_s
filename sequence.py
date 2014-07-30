@@ -43,6 +43,21 @@
 # 		rc_string = ''.join([SubSequence.reverse_table[nucl] for nucl in reversed(string)])
 # 		return(rc_string)
 
+def longest_common_substring(s1, s2):
+    m = [[0] * (1 + len(s2)) for i in xrange(1 + len(s1))]
+    longest, x_longest = 0, 0
+    for x in xrange(1, 1 + len(s1)):
+        for y in xrange(1, 1 + len(s2)):
+            if s1[x - 1] == s2[y - 1]:
+                m[x][y] = m[x - 1][y - 1] + 1
+                if m[x][y] > longest:
+                    longest = m[x][y]
+                    x_longest = x
+            else:
+                m[x][y] = 0
+    #print x_longest - longest, x_longest
+    return x_longest - longest, x_longest # s1[x_longest - longest: x_longest]
+
 
 def reverse_complement(string):
  	reverse_table = {'A':'T','C':'G','G':'C','T':'A', 'N':'N',
@@ -65,6 +80,7 @@ class Contig(object):
 		self.subsequences = []
 		self.bases_aligned = 0
 		self.is_repeat = None 
+		self.is_outputted = 0
 
 	def __len__(self):
 		return len(self.sequence)
@@ -77,6 +93,7 @@ class Contig(object):
 			params:
 			rc 	bool 
 		"""
+		self.is_outputted +=1
 		if rc == 0:
 			return self.sequence
 		else:
@@ -101,10 +118,14 @@ class Scaffold(object):
 		self.name = name
 		#self.subsequences = []
 
-	def make_fasta_string(self,path_object,contigs):
+	def check_kmer_overlap(self,end1,end2):
+		#return 0,0
+		return longest_common_substring(end1,end2)
+
+	def make_fasta_string(self,path_object,contigs,k_mer_overlap):
 		path = path_object.path
 		gap_dict = path_object.gaps
-		fasta = '>s{0}\n'.format(self.name)
+		fasta = '>{0}\n'.format(self.name)
 
 		# first contig
 
@@ -112,18 +133,24 @@ class Scaffold(object):
 
 		for ctg1,ctg2 in zip(path[:-1],path[1:]):
 			if ctg1[0] == ctg2[0]:
-				fasta += contigs[ctg1[0]].get_sequence(ctg1[1])
+				pass
 			else:
-				gap = gap_dict[(ctg1,ctg2)]
-				print gap
-				if gap < 1:
-					# do kmer overlap search and merge
-					fasta += 'n'
+				string = contigs[ctg2[0]].get_sequence(ctg2[1])
+				overlap_start, overlap_end = self.check_kmer_overlap(fasta[-k_mer_overlap:],string[:k_mer_overlap])
+				if overlap_end == k_mer_overlap and overlap_end - overlap_start > max(k_mer_overlap/2, 20):
+					fasta += 'n' + string[overlap_end - overlap_start:]
+					print 'merging {0} bp here'.format(overlap_end - overlap_start)
 				else:
-					fasta += 'N'*int(gap)
+					gap = gap_dict[(ctg1,ctg2)]
+					print gap
+					if gap < 1:
+						# do kmer overlap search and merge
+						fasta += 'n' + string
+					else:
+						fasta += 'N'*int(gap) + string
 
 		# last contig
-		fasta += contigs[ctg2[0]].get_sequence(ctg2[1])
+		#fasta += contigs[ctg2[0]].get_sequence(ctg2[1])
 
 		return fasta
 
@@ -136,9 +163,5 @@ class ScaffoldContainer(object):
 	def add_scaffold(self,scaf_object):
 		self.scaffolds[scaf_object.name] = scaf_object
 
-	def merge_contig_paths(self,path1,path2):
-		"""
-			Takes two 
-		"""
 		
 		
