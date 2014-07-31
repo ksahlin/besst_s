@@ -1,4 +1,3 @@
-import os
 
 import networkx as nx
 
@@ -14,6 +13,12 @@ def sum_of_all_nbrs_exept_longest(nbrs,contigs):
 	lengths.sort(reverse=True)
 	return sum(lengths[1:])
 
+def sum_of_repeat_lengths(path,contigs):
+	assert len(path)%2 == 0
+	structure_length = 0
+	for repeat in path[::2]:
+		structure_length += contigs[repeat[0]].length
+	return structure_length
 
 class ContigGraph(nx.MultiGraph):
 	"""docstring for ContigGraph"""
@@ -143,15 +148,16 @@ class ContigGraph(nx.MultiGraph):
 			for lib in besst.libs: 
 				if len(self.lib_neighbors(node, lib)) > 1:
 					if lib.lib_type == 'pe':
-						if sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs) > lib.mean_innies + 4*lib.sd_innies + 2*besst.config_params.kmer_overlap:
-							print sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs)
-							for nbr in self.lib_neighbors(node, lib):
-								print 'info:',self[node][nbr]
+						if sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs) > lib.mean + 4*lib.sd + 2*besst.config_params.kmer_overlap and contigs[node[0]].coverage > 1.5 * besst.tot_mean_coverage:
+							print 'here okay', sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs)
+							# for nbr in self.lib_neighbors(node, lib):
+							# 	print 'info:',self[node][nbr]
 							#print 'nbrs:',
 							contigs[node[0]].is_repeat = True
 							yield node
 					elif lib.lib_type == 'mp':
-						if sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs) > lib.mean_outies + 4*lib.sd_outies + 2*besst.config_params.kmer_overlap:
+						if sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs) > lib.mean + 4*lib.sd + 2*besst.config_params.kmer_overlap and contigs[node[0]].coverage > 1.5 * besst.tot_mean_coverage:
+							print 'here okay', sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs)
 							contigs[node[0]].is_repeat = True
 							yield node 
 
@@ -192,14 +198,16 @@ class ContigGraph(nx.MultiGraph):
 				# return the flanking contig ends of a repeat (only if flanks are directly connected )
 				if len(path) == 4:
 					#print path[1],path[-2]
-					yield path[1], path[-2]
+					# return flanting contig nodes plus the library object that is connecting them
+					key = G_full[path[1]][path[-2]].keys()[0]
+					yield path[1], path[-2], G_full[path[1]][path[-2]][key]['l']
 			else:
-				yield None,None
+				yield None,None, None
 		except nx.exception.NetworkXNoPath:
 			#print 'no path, i.e. repeat structure cannot be bridged over'
-			yield None,None
+			yield None,None, None
 
-	def repeat_structure_iterator(self, G_full, contigs):
+	def repeat_structure_iterator(self, G_full, contigs,besst):
 		"""
 			Assemble complicated repeat regions using an iterative buildup of assembling the closest 
 			neighbors of a repeat. This iterative procedure is continued until both endpoints are classified as
@@ -210,18 +218,19 @@ class ContigGraph(nx.MultiGraph):
 		for repeat in self.repeat_regions:
 			queue.enqueue([(repeat,0),(repeat,1)])
 
+
 		while not queue.IsEmpty():
 			repeat_structure = queue.dequeue()
+
 			repeat_structure_left_end,repeat_structure_right_end = repeat_structure[0], repeat_structure[-1]
 			#for item in self.get_contigs_flanking_a_repeat_structure(G_full, repeat_structure_left_end, repeat_structure_right_end):
 			#		print item
 
-			for flank1,flank2 in self.get_contigs_flanking_a_repeat_structure(G_full, repeat_structure_left_end, repeat_structure_right_end):
+			for flank1,flank2,lib_object in self.get_contigs_flanking_a_repeat_structure(G_full, repeat_structure_left_end, repeat_structure_right_end):
 				if flank1 == None and flank2 == None:
 					# return unsuccessful repats here
 					yield repeat_structure , 0
 					continue
-
 				if not contigs[flank1[0]].is_repeat and not contigs[flank2[0]].is_repeat:
 					# bothe ends are not repeats
 					# finally, check that the repeat structure is not spuriously build by
@@ -231,31 +240,44 @@ class ContigGraph(nx.MultiGraph):
 					if self.good_repeat_structure(G_full, flank1, flank2, repeat_structure):
 						print 'lolsss'
 						new_structure = [flank1] + repeat_structure + [flank2]
-						yield  new_structure, 1
+						supporting_links = self.nr_supporting_links(G_full, flank1, flank2, repeat_structure)
+						yield  new_structure, supporting_links
 					else:
 						print 'spurious repeat structure'
 
+				elif len(repeat_structure)/2 > 2:
+
+					# heuristic stopping criterion
+					continue
+
 				elif contigs[flank1[0]].is_repeat and not contigs[flank2[0]].is_repeat:
 					# left end is still a repeat, continue building structure
+					#print '1'
 					new_structure = [self.other_end(flank1), flank1] + repeat_structure 
-					queue.enqueue(new_structure)
+					if sum_of_repeat_lengths(new_structure[:-2] ,contigs) <= lib_object.mean + 3*lib_object.sd + (len(new_structure[:-2])/2)*besst.config_params.kmer_overlap:
+					
+						queue.enqueue(new_structure)
 
 				elif not contigs[flank1[0]].is_repeat and contigs[flank2[0]].is_repeat:
 					#right end is still a repeat, continue building structure
+					#print '2'
 					new_structure =  repeat_structure + [flank2,self.other_end(flank2)]
-					queue.enqueue(new_structure)
+					if sum_of_repeat_lengths(new_structure[2:] ,contigs) <= lib_object.mean + 3*lib_object.sd + (len(new_structure[2:])/2)*besst.config_params.kmer_overlap:
+						queue.enqueue(new_structure)
 
 				else:
-					# Both eds are still repeats,  continue building structure
+					# Both ends are still repeats,  continue building structure
+					#print '3'
 					new_structure = [self.other_end(flank1), flank1] + repeat_structure + [flank2,self.other_end(flank2)]
-					queue.enqueue(new_structure)
+					if sum_of_repeat_lengths(new_structure ,contigs) <= lib_object.mean + 3*lib_object.sd + (len(new_structure)/2)*besst.config_params.kmer_overlap:
+						queue.enqueue(new_structure)
 
 
 	def good_repeat_structure(self, G_full, unique_ctg1, unique_ctg2,repeat_structure):
 		left_links = map(lambda x: 1 if x in G_full.neighbors(unique_ctg1) else 0, repeat_structure[::2])
 		right_links = map(lambda x: 1 if x in G_full.neighbors(unique_ctg2) else 0, repeat_structure[1::2])
 		is_linked = []
-		print left_links,right_links
+
 		for l,r in zip(left_links, right_links):
 			if l+r > 0:
 				is_linked.append(True)
@@ -263,7 +285,13 @@ class ContigGraph(nx.MultiGraph):
 				is_linked.append(False)
 
 		return(all(is_linked))
-		
+
+	def nr_supporting_links(self, G_full, unique_ctg1, unique_ctg2,repeat_structure):
+		nr_left_links = map(lambda x: G_full[x][unique_ctg1][ G_full[x][unique_ctg1].keys()[0] ]['n'] if x in G_full.neighbors(unique_ctg1) else 0, repeat_structure[::2])
+		nr_right_links = map(lambda x: G_full[x][unique_ctg2][ G_full[x][unique_ctg2].keys()[0] ]['n'] if x in G_full.neighbors(unique_ctg2) else 0, repeat_structure[1::2])
+		tot_links = sum(nr_right_links)+sum(nr_left_links)
+
+		return tot_links		
 
 
 

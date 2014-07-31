@@ -9,7 +9,8 @@ def get_orientation(o,s1,s2):
         sys.stderr.write('Orientation incorrectly specified for link: {0}, {1}.'.format(s1,s2))
         raise IOError
 
-def get_links(link_file):
+def get_links(link_file_path):
+    link_file = open(link_file_path,'r')
     while True:
         next_3_lines = list(itertools.islice(link_file, 3))
         if not next_3_lines:
@@ -21,4 +22,5 @@ def get_links(link_file):
             mean_obs = sum(map(lambda x: x[0]+x[1], zip(obs_list1,obs_list2)) )/float(nr_links)  
             yield (ctg1, int(o1), ctg2, int(o2), int(nr_links), link_type, mean_obs)
 
-    link_file.seek(0)
+    #link_file.seek(0)
+    link_file.close()

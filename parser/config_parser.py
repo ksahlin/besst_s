@@ -27,7 +27,11 @@ class ConfigParams(object):
             	if not os.path.exists(lib_location):
             		sys.stderr.write('Library path given in config file does not exist. You gave:\n {0}\n'.format(lib_location))
             		sys.exit()
-                lib = (lib_type, aligner, lib_location)
+                if len(input_lib) == 6:
+                    mean,sd = int(input_lib[-2]), int(input_lib[-1])
+                    lib = (lib_type, aligner, lib_location, mean, sd)
+                elif len(input_lib) == 4:
+                    lib = (lib_type, aligner, lib_location)
                 self.libs.append(lib)
 
             elif line[:1] == "4":

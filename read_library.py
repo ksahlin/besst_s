@@ -37,15 +37,17 @@ def remove_outliers(ins_size_reads):
 
 class Library(object):
 	"""docstring for Library"""
-	def __init__(self, lib_name, lib_type, aligner, bam_path, link_file):
+	def __init__(self, lib_name, lib_type, aligner, bam_path, link_file_path,mean=None,sd=None):
 		super(Library, self).__init__()
 		self.lib_name = lib_name
 		self.bam_path = bam_path
 		self.lib_type = lib_type
 		self.aligner = aligner
-		open(link_file,'w').close()
-		#os.utime(link_file, None)
-		self.link_file = open(link_file,'r+')
+		#open(link_file_path,'w').close()
+		#os.utime(link_file_path, None)
+		self.link_file_path = link_file_path
+		self.mean=mean
+		self.sd=sd
 
 
 	def calculate_coverage(self, contigs):
@@ -98,6 +100,10 @@ class Library(object):
 
 		self.read_len = sum(read_length)/len(read_length)
 
+		if not self.mean and not self.sd:
+			self.mean = self.mean_innies if self.lib_type =='pe' else self.mean_outies
+			self.sd = self.sd_innies if self.lib_type =='pe' else self.sd_outies
+
 	def sorted_bam_to_link_file(self,contigs, kmer_overlap):
 		bam_iter = bam_parser.BamParser(self.bam_path)
 		edges = {}
@@ -114,7 +120,9 @@ class Library(object):
 				mp_obs1, mp_obs2 = bam_parser.get_mp_observation(read1, read2, bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read1.tid)],bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read2.tid)] )
 				pe_obs1, pe_obs2 = bam_parser.get_pe_observation(read1, read2, bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read1.tid)],bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read2.tid)] )
 				
-				if mp_obs1 + mp_obs2 < self.mean_outies + 4*self.sd_outies + kmer_overlap and pe_obs1 + pe_obs2 < self.mean_innies + 4*self.sd_innies + kmer_overlap:
+				##
+				# reads could be both RF or FR, we can't deduce because of the size of the contigs  
+				if mp_obs1 + mp_obs2 < self.mean + 4*self.sd + kmer_overlap and pe_obs1 + pe_obs2 < self.mean_innies + 4*self.sd_innies + kmer_overlap:
 					if index == 0:
 						edges[bam_iter.bam_file.getrname(ctg)].add_pe_link(pe_obs1,pe_obs2, read1.is_reverse, read2.is_reverse, bam_iter.bam_file.getrname(read2.tid),'pe_am') 
 						edges[bam_iter.bam_file.getrname(ctg)].add_mp_link(mp_obs1,mp_obs2, read1.is_reverse, read2.is_reverse, bam_iter.bam_file.getrname(read2.tid),'mp_am')
@@ -122,12 +130,17 @@ class Library(object):
 						edges[bam_iter.bam_file.getrname(ctg)].add_pe_link(pe_obs2,pe_obs1, read2.is_reverse, read1.is_reverse, bam_iter.bam_file.getrname(read1.tid),'pe_am') 
 						edges[bam_iter.bam_file.getrname(ctg)].add_mp_link(mp_obs2,mp_obs1, read2.is_reverse, read1.is_reverse, bam_iter.bam_file.getrname(read1.tid),'mp_am')
 			
-				elif mp_obs1 + mp_obs2 < self.mean_outies + 4*self.sd_outies + kmer_overlap :	
+				##
+				# Reads can only be RF
+				elif mp_obs1 + mp_obs2 < self.mean + 4*self.sd + kmer_overlap :	
 					if index == 0:
 						edges[bam_iter.bam_file.getrname(ctg)].add_mp_link(mp_obs1,mp_obs2, read1.is_reverse, read2.is_reverse, bam_iter.bam_file.getrname(read2.tid), 'mp') 
 					else:
 						edges[bam_iter.bam_file.getrname(ctg)].add_mp_link(mp_obs2,mp_obs1, read2.is_reverse, read1.is_reverse, bam_iter.bam_file.getrname(read1.tid),'mp') 
 					
+				##
+				# Reds must be FR (contamine reads)
+				
 				elif pe_obs1 + pe_obs2 < self.mean_innies + 4*self.sd_innies + kmer_overlap:
 					if index == 0:
 						edges[bam_iter.bam_file.getrname(ctg)].add_pe_link(pe_obs1,pe_obs2, read1.is_reverse, read2.is_reverse, bam_iter.bam_file.getrname(read2.tid),'pe') 
@@ -138,7 +151,7 @@ class Library(object):
 
 			else:
 				obs1, obs2 = bam_parser.get_pe_observation(read1, read2, bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read1.tid)], bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read2.tid)])
-				if obs1 + obs2 < self.mean_innies + 4*self.sd_innies + kmer_overlap:
+				if obs1 + obs2 < self.mean + 4*self.sd + kmer_overlap:
 					if index == 0:
 						edges[bam_iter.bam_file.getrname(ctg)].add_pe_link(obs1,obs2, read1.is_reverse, read2.is_reverse, bam_iter.bam_file.getrname(read2.tid),'pe') 
 					else:
@@ -146,11 +159,15 @@ class Library(object):
 
 			 #,  bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read1.tid)],bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read2.tid)]
 			#print read1,read2 #, read.tlen
-			#link_file.write(str(seq_id)+'\t'+contig.name+'\t'+ str(start)+'\t'+str(stop)+'\n')
+			#link_file_path.write(str(seq_id)+'\t'+contig.name+'\t'+ str(start)+'\t'+str(stop)+'\n')
+
+		link_file = open(self.link_file_path,'w')
 		for connection in edges:
 			if str(edges[connection]):
-				self.link_file.write(str(edges[connection]))
-		self.link_file.seek(0)
+				link_file.write(str(edges[connection]))
+
+		link_file.close()
+		#self.link_file.seek(0)
 		#self.link_file.read()
 				#print >> self.link_file, edges[connection]
 	
@@ -159,11 +176,11 @@ class Library(object):
 		if self.lib_type == 'mp':
 			return 'Library type:{0}\nLibrary mean:{1} \
 			\nLibrary sd:{2}\nAligned with:{3}\nContamination rate:{4}\nContamination mean:{5}\n Contamination sd:{6}\nLibrary mean cov:{7}\nLibrary sd cov:{8}'.format(self.lib_type, 
-				self.mean_outies,self.sd_outies,self.aligner,
+				self.mean,self.sd,self.aligner,
 				self.contamine_rate, self.mean_innies,self.sd_innies,
 				self.mean_coverage,self.sd_coverage)
 		else:
-			return 'Library type:{0}\nLibrary mean:{1}\nLibrary sd:{2}\nAligned with:{3}\nLibrary mean cov:{4}\nLibrary sd cov:{5}'.format(self.lib_type, self.mean_innies,self.sd_innies,self.aligner,self.mean_coverage,self.sd_coverage)
+			return 'Library type:{0}\nLibrary mean:{1}\nLibrary sd:{2}\nAligned with:{3}\nLibrary mean cov:{4}\nLibrary sd cov:{5}'.format(self.lib_type, self.mean,self.sd,self.aligner,self.mean_coverage,self.sd_coverage)
 
 
 

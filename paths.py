@@ -22,10 +22,13 @@ class LinkObservation(object):
         self.help_variable      =   None
 
     def gapest_mean_observation(self,contig1,contig2):
-        if self.link_type == 'pe_am' or self.link_type == 'pe':
+
+        if self.link_type == 'pe':
+            self.exp_mean_gapest   =   self.mean_obs + GC.GapEstimator(self.link_lib.mean, self.link_lib.sd, self.link_lib.read_len - self.link_lib.max_softclipped, self.mean_obs, contig1.length, contig2.length)
+        if self.link_type == 'pe_am':
             self.exp_mean_gapest   =   self.mean_obs + GC.GapEstimator(self.link_lib.mean_innies, self.link_lib.sd_innies, self.link_lib.read_len - self.link_lib.max_softclipped, self.mean_obs, contig1.length, contig2.length)
         elif self.link_type == 'mp_am' or self.link_type == 'mp':
-            self.exp_mean_gapest   =   self.mean_obs + GC.GapEstimator(self.link_lib.mean_outies, self.link_lib.sd_outies, self.link_lib.read_len - self.link_lib.max_softclipped, self.mean_obs, contig1.length, contig2.length)
+            self.exp_mean_gapest   =   self.mean_obs + GC.GapEstimator(self.link_lib.mean, self.link_lib.sd, self.link_lib.read_len - self.link_lib.max_softclipped, self.mean_obs, contig1.length, contig2.length)
         
         #print 'mean obs:',self.mean_obs, 'nr_links:',self.nr_effective_links, 'gapest:', self.exp_mean_gapest, 'read_len:',self.link_lib.read_len
 
@@ -81,6 +84,7 @@ class Path(object):
         problem += lpSum( [ link_object.help_variable*link_object.nr_effective_links for (ctg1,ctg2), link_object in self.observations.iteritems()] ) , "objective"
 
         # adding constraints induced by the absolute value of objective function
+        print self.observations
         for (ctg1,ctg2), link_object in self.observations.iteritems():
             problem += link_object.exp_mean_gapest - sum(map(lambda x: x, self.contig_lengths[link_object.from_ctg_index+1:link_object.to_ctg_index])) - link_object.mean_obs  - lpSum( gap_vars[ link_object.from_ctg_index : link_object.to_ctg_index] )  <= link_object.help_variable,  "helpcontraint_"+str(link_object.from_ctg_index)+'_'+ str(link_object.to_ctg_index)+'_'+str(link_object.link_type)
 
@@ -246,7 +250,7 @@ class PathFactory(object):
         if path1.path[0] == other_end(path2.path[0]) and  path1.path[-1] == other_end(path2.path[-1]) \
         or path1.path[-1] == other_end(path2.path[0]) and  path1.path[0] == other_end(path2.path[-1]):
             print ' circular paths! Skipping merging'
-            return 0
+            return path1
 
         elif path1.path[-1] == other_end(path2.path[0]) :
             p = Path(self.besst,path1.path + path2.path, self.contigs )

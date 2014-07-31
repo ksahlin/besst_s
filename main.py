@@ -32,7 +32,12 @@ class GlobaInfo(object):
 			elif lib.lib_type == 'pe':
 				if cutoff <= lib.mean_innies + 3*lib.sd_innies:
 					cutoff = lib.mean_innies + 3*lib.sd_innies	
-		self.cutoff = cutoff		
+		self.cutoff = cutoff
+	def calculate_total_mean_coverage(self):
+		tot_cov = 0
+		for lib in self.libs:
+			tot_cov += lib.mean_coverage
+		self.tot_mean_coverage = tot_cov		
 
 besst = GlobaInfo()
 
@@ -43,8 +48,15 @@ def read_in_contigs(config_params,contig_dict):
 
 def read_library_metrics(config_params, contigs):
 	lib_name =1
-	for lib_type, aligner, lib_loc in config_params.libs:
-		lib = read_library.Library(lib_name, lib_type, aligner, lib_loc, os.path.join(config_params.output_path, 'lib_{0}_links.txt'.format(lib_name)))
+	for  lib_info in config_params.libs:
+		if len(lib_info) == 5:
+			lib_type, aligner, lib_loc ,mean, sd = lib_info
+			lib = read_library.Library(lib_name, lib_type, aligner, lib_loc, os.path.join(config_params.output_path, 'lib_{0}_links.txt'.format(lib_name)),mean=mean,sd=sd)
+
+		elif len(lib_info) == 3:
+			lib_type, aligner, lib_loc = lib_info
+			lib = read_library.Library(lib_name, lib_type, aligner, lib_loc, os.path.join(config_params.output_path, 'lib_{0}_links.txt'.format(lib_name)))
+
 		lib.get_libary_metrics()
 		#print contigs
 		lib.calculate_coverage(contigs)
@@ -69,7 +81,7 @@ def create_graph(G,contigs):
 	##
 	# Create edges
 	for lib in besst.libs:
-		for (ctg1, orientation1, ctg2, orientation2, link_count, link_type, mean_obs) in  link_parser.get_links(lib.link_file):
+		for (ctg1, orientation1, ctg2, orientation2, link_count, link_type, mean_obs) in  link_parser.get_links(lib.link_file_path):
 			if link_count >= besst.config_params.min_links:
 				G.add_link_edge(ctg1, orientation1, ctg2, orientation2, link_count, link_type, mean_obs, lib)
 
@@ -97,17 +109,16 @@ def main(args):
 	create_link_file(contigs)
 	G = ContigGraph()
 	create_graph(G,contigs)
+	besst.calculate_total_mean_coverage()
 
 
-
-	pickle.dump( G.copy_no_edge_info(), open( "/tmp/save_graph.p", "wb" ) )
-
-	#print G[('19__len__201', 0)]
-	#print G[('19__len__201', 1)]
+	#pickle.dump( G.copy_no_edge_info(), open( "/tmp/save_graph.p", "wb" ) )
+	pickle.dump( G, open( "/tmp/save_graph.p", "wb" ) )
 
 	# filter out repeats temporarily
 
 	G.freeze_repeat_regions(contigs, besst)
+
 
 	# graph_path = os.path.join(besst.config_params.output_path,'ctg_graph_w_repeats.png')	
 	# G.draw(graph_path,repeats)
@@ -122,19 +133,25 @@ def main(args):
 	#print G.all_edges_between_two_nodes(('27__len__157', False), ('18__len__153', 1))
 
 
-	besst.get_cut_vertex_cutoff()
-	path_factory = paths.PathFactory(besst, G, contigs, 200 , 30, 100000)
+
 
 	# output paths in sorted score order
 	G_full = pickle.load( open( "/tmp/save_graph.p", "rb" ) )
-
+	#print G_full.edges(data=True)
 
 	repeat_paths = {}
 	tmp_file = open('/tmp/repeats.txt', 'w')
-	for repeat_region, resolved in G.repeat_structure_iterator(G_full, contigs):
-		if resolved:
-			print >> tmp_file, 'resolved:', repeat_region
-			repeat_paths[(repeat_region[0],repeat_region[-1])] = repeat_region
+	for repeat_region, supporting_links in G.repeat_structure_iterator(G_full, contigs, besst):
+
+		1 Only take the best repeat path here between unique nodes!!!
+		2 Also fix so that constraints are not named the same between contig A and 
+			contig B since if they are a repeat structure, they can occur multiple times
+		3 Change the criteria for how we clasify repeats.
+		4 Lift repeat structure bound threshold??
+		
+		if supporting_links:
+			print >> tmp_file, 'Supported:', repeat_region,' supporting links:', supporting_links
+			repeat_paths[(repeat_region[0],repeat_region[-1])] = (repeat_region,supporting_links)
 		else:
 			print >> tmp_file, 'Not resolved:' ,repeat_region
 
@@ -143,40 +160,34 @@ def main(args):
 			# recalculate positions of contigs
 			# make scaffold a la besst1 procedure
 
-	G = ContigGraph()
-	create_graph(G,contigs)
+	#G = ContigGraph()
+	#create_graph(G,contigs)
 
-	
+	print 'LOL NODES left:',len(G.nodes())/2
+
+	besst.get_cut_vertex_cutoff()
+	path_factory = paths.PathFactory(besst, G, contigs, 500 , 30, 100000)
 	#tmp_paths = []
 	#print G.edges(data=True)
 	for path in path_factory.find_paths():
 		print path, path.score, path.good_links,path.bad_links
 
-		# for repeat_ends in repeat_paths:
-		# 	if repeat_ends in zip(path.path[:-1],path.path[1:]) or repeat_ends in zip(reversed(path.path[:-1]),reversed(path.path[1:])):
-		# 		print 'heere__'
-		# 		print repeat_paths[repeat_ends]
-		# 		path.add_repeat_region(repeat_ends[0],repeat_ends[1],repeat_paths[repeat_ends][1:-1])
-		# 		path.find_supporting_links(G)
-		# 		path.LP_solve_gaps()
-		# 		path.score_path(G)
-		# 		print 'after:'
-		# 		print path, path.score, path.good_links, path.bad_links, 'lool'
-		# 		print path.gaps
-				#
+		for repeat_ends in repeat_paths:
+			if repeat_ends in zip(path.path[:-1],path.path[1:]) or repeat_ends in zip(reversed(path.path[:-1]),reversed(path.path[1:])):
+				print 'heere__'
+				print 'repeat path:',repeat_paths[repeat_ends]
+				# print 'original path :', path
+				# path.add_repeat_region(repeat_ends[0],repeat_ends[1],repeat_paths[repeat_ends][1:-1])
+				# path.find_supporting_links(G_full)
+				# path.LP_solve_gaps()
+				# path.score_path(G)
+				# print 'after:'
+				# print path, path.score, path.good_links, path.bad_links, 'lool'
+				# print path.gaps
+				# #
 		path_factory.add_subpath(path)
 		#tmp_paths.append(path)
 
-		##
-		# merge paths here
-
-		# implement this in pathfactory
-		#path_endpoints = {}
-		#path_endpoints[(0,0)] = 0
-		# merge.paths
-
-	##
-	# Find k-mer overlaps
 
 	##
 	# Make fasta sequences for all paths
