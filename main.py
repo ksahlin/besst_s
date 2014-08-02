@@ -57,6 +57,16 @@ def read_library_metrics(config_params, contigs):
 			lib_type, aligner, lib_loc = lib_info
 			lib = read_library.Library(lib_name, lib_type, aligner, lib_loc, os.path.join(config_params.output_path, 'lib_{0}_links.txt'.format(lib_name)))
 
+
+		elif len(lib_info) == 6:
+			lib_type, aligner, lib_loc1,lib_loc2 ,mean, sd = lib_info
+			lib = read_library.Library(lib_name, lib_type, aligner, lib_loc1, os.path.join(config_params.output_path, 'lib_{0}_links.txt'.format(lib_name)), bam_path2=lib_loc2,mean=mean,sd=sd)
+		
+		elif len(lib_info) == 4:
+			lib_type, aligner, lib_loc1,lib_loc2 = lib_info
+			lib = read_library.Library(lib_name, lib_type, aligner, lib_loc1, os.path.join(config_params.output_path, 'lib_{0}_links.txt'.format(lib_name)), bam_path2=lib_loc2)
+
+
 		lib.get_libary_metrics()
 		#print contigs
 		lib.calculate_coverage(contigs)
@@ -141,19 +151,26 @@ def main(args):
 
 	repeat_paths = {}
 	tmp_file = open('/tmp/repeats.txt', 'w')
-	for repeat_region, supporting_links in G.repeat_structure_iterator(G_full, contigs, besst):
+	unique_flanks = set()
 
-		1 Only take the best repeat path here between unique nodes!!!
-		2 Also fix so that constraints are not named the same between contig A and 
-			contig B since if they are a repeat structure, they can occur multiple times
-		3 Change the criteria for how we clasify repeats.
-		4 Lift repeat structure bound threshold??
-		
-		if supporting_links:
-			print >> tmp_file, 'Supported:', repeat_region,' supporting links:', supporting_links
-			repeat_paths[(repeat_region[0],repeat_region[-1])] = (repeat_region,supporting_links)
+	for repeat_structure in G.most_supported_repeats(G_full, contigs,besst):
+		if repeat_structure.repeat_path[0] in unique_flanks or repeat_structure.repeat_path[-1] in unique_flanks:
+			print >> tmp_file, 'Alreadu treated this unique flank!'
+			print >> tmp_file, repeat_structure
 		else:
-			print >> tmp_file, 'Not resolved:' ,repeat_region
+			repeat_paths[(repeat_structure.repeat_path[0],repeat_structure.repeat_path[-1])] = repeat_structure.repeat_path
+			print >> tmp_file, 'Repeat structure taken!'
+			print >> tmp_file, repeat_structure
+		unique_flanks.add(repeat_structure.repeat_path[0])
+		unique_flanks.add(repeat_structure.repeat_path[-1])
+
+
+		#1 Only take the best repeat path here between unique nodes!!!
+		# 2 Also fix so that constraints are not named the same between contig A and 
+		# 	contig B since if they are a repeat structure, they can occur multiple times
+		# 3 Change the criteria for how we clasify repeats.
+		# 4 Lift repeat structure bound threshold??
+
 
 			# check if repeats can be filled in otherwise, output the repeat structure by itself 
 			# as a separate scaffold
@@ -166,16 +183,38 @@ def main(args):
 	print 'LOL NODES left:',len(G.nodes())/2
 
 	besst.get_cut_vertex_cutoff()
-	path_factory = paths.PathFactory(besst, G, contigs, 500 , 30, 100000)
+	path_factory = paths.PathFactory(besst, G, contigs, 300 , 30, 40000)
 	#tmp_paths = []
 	#print G.edges(data=True)
 	for path in path_factory.find_paths():
 		print path, path.score, path.good_links,path.bad_links
 
-		for repeat_ends in repeat_paths:
-			if repeat_ends in zip(path.path[:-1],path.path[1:]) or repeat_ends in zip(reversed(path.path[:-1]),reversed(path.path[1:])):
-				print 'heere__'
-				print 'repeat path:',repeat_paths[repeat_ends]
+		for flank1,flank2 in zip(path.path[:-1],path.path[1:]):
+			if (flank1,flank2) in repeat_paths:
+				print 'heere__1'
+				print 'repeat path:',repeat_paths[(flank1,flank2)]
+				path.add_repeat_region(flank1, flank2, repeat_paths[(flank1,flank2)][1:-1])
+				path.find_supporting_links(G_full)
+				path.LP_solve_gaps()
+				path.score_path(G_full)
+				print 'after:'
+				print path, path.score, path.good_links, path.bad_links, 'lool'
+
+		for flank1,flank2 in zip(reversed(path.path[:-1]),reversed(path.path[1:])):
+			if (flank1,flank2) in repeat_paths:
+				print 'heere__2'
+				print 'repeat path:',repeat_paths[(flank1,flank2)]
+				# path.add_repeat_region(flank1, flank2, repeat_paths[(flank1,flank2)][1:-1])
+				# path.find_supporting_links(G_full)
+				# path.LP_solve_gaps()
+				# path.score_path(G_full)
+				# print 'after:'
+				# print path, path.score, path.good_links, path.bad_links, 'lool'
+
+		# for repeat_ends in repeat_paths:
+		# 	if repeat_ends in zip(path.path[:-1],path.path[1:]) or repeat_ends in zip(reversed(path.path[:-1]),reversed(path.path[1:])):
+		# 		print 'heere__'
+		# 		print 'repeat path:',repeat_paths[repeat_ends]
 				# print 'original path :', path
 				# path.add_repeat_region(repeat_ends[0],repeat_ends[1],repeat_paths[repeat_ends][1:-1])
 				# path.find_supporting_links(G_full)

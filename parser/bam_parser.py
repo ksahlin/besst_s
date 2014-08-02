@@ -29,9 +29,34 @@ def is_proper_aligned_unique_outie(read):
                 and not read.mate_is_unmapped and read.opt('XT')=='U' and not read.is_secondary
 
 def is_unique_read_link(read):
+    # if  not read.is_unmapped and not read.mate_is_unmapped and read.rname != read.mrnm \
+    # and read.opt('XT')=='U' and not read.is_secondary and read.rlen != read.alen:
+    #     print read
     return not read.is_unmapped and not read.mate_is_unmapped and read.rname != read.mrnm \
     and read.opt('XT')=='U' and not read.is_secondary
 
+
+### BOWTIE ####
+def proper_unique_alignment_innie_bowtie(read1,read2):
+    unique1 = not read1.is_unmapped and not read1.is_secondary 
+    unique2 = not read2.is_unmapped and not read2.is_secondary 
+    is_innie = not read1.is_reverse and read2.is_reverse and read1.pos < read2.pos \
+                or read1.is_reverse and not read2.is_reverse and read1.pos > read2.pos
+    return unique1 and unique2 and is_innie 
+
+def proper_unique_alignment_outie_bowtie(read1,read2):
+    unique1 = not read1.is_unmapped and not read1.is_secondary 
+    unique2 = not read2.is_unmapped and not read2.is_secondary  
+    is_outie = read1.is_reverse and not read2.is_reverse and read1.pos < read2.pos \
+                or not read1.is_reverse and read2.is_reverse and read1.pos > read2.pos
+    return unique1 and unique2 and is_outie 
+
+def unique_link_alignment_bowtie(read1,read2):
+    unique1 = not read1.is_unmapped and not read1.is_secondary 
+    unique2 = not read2.is_unmapped and not read2.is_secondary  
+    return unique1 and unique2 
+
+##############
 
 def get_mp_observation(read1, read2, ctg_len1, ctg_len2):
     if not read1.is_reverse:
@@ -59,9 +84,11 @@ def get_pe_observation(read1, read2, ctg_len1, ctg_len2):
 
 class BamParser(object):
     """docstring for BamParser"""
-    def __init__(self, bam_file):
+    def __init__(self, bam_file,bam_path2 = None):
         super(BamParser, self).__init__()
         self.bam_file = open_bam_file(bam_file)
+        if bam_path2:
+            self.bam_file2 = open_bam_file(bam_path2) 
         self.contig_lengths = dict(zip(self.bam_file.references,self.bam_file.lengths))
 
     def proper_aligned_unique_pairs(self,aligner, samples=2**32):
@@ -83,13 +110,46 @@ class BamParser(object):
 
                     if nr_samples >= samples:
                         break
-        self.bam_file.seek(0)
+            self.bam_file.seek(0)
 
-    def aligned_reads(self):
-        for read in self.bam_file:
-            if not read.is_unmapped:
-                yield read 
-        self.bam_file.seek(0)
+
+        elif aligner == 'bowtie':
+            ctgs_largest_first = [ref for ref, length in  sorted(zip(self.bam_file.references,self.bam_file.lengths), key = lambda x: x[1], reverse = True)]
+            long_ctgs = set(ctgs_largest_first[:10])
+            for read1,read2 in zip(self.bam_file,self.bam_file2):
+                assert read1.qname == read2.qname
+                same_ref = read1.rname == read2.rname
+                if same_ref and proper_unique_alignment_innie_bowtie(read1,read2): 
+                    if not self.bam_file.getrname( read1.tid) in long_ctgs and  not self.bam_file2.getrname(read2.tid) in long_ctgs:
+                        continue
+                    nr_samples += 1
+                    read1.tlen = abs(read1.pos - read2.pos) + read1.rlen
+                    yield 'innie',read1
+                elif same_ref and proper_unique_alignment_outie_bowtie(read1,read2): 
+                    if not self.bam_file.getrname( read1.tid) in long_ctgs and not self.bam_file2.getrname(read2.tid) in long_ctgs:
+                        continue
+                    nr_samples += 1
+                    read1.tlen = abs(read1.pos - read2.pos) + 2*read1.rlen
+                    yield 'outie',read1
+
+                if nr_samples >= samples:
+                    break
+            self.bam_file.seek(0)      
+
+    def aligned_reads(self,aligner):
+        if aligner == 'bwa' or aligner == 'bwamem':
+            for read in self.bam_file:
+                if not read.is_unmapped:
+                    yield read 
+            self.bam_file.seek(0)
+        elif aligner == 'bowtie':
+            for read1,read2 in zip(self.bam_file,self.bam_file2):
+                if not read1.is_unmapped and not read2.is_unmapped:
+                    yield read1,read2           
+                elif not read1.is_unmapped:
+                    yield read1,False
+                elif not read2.is_unmapped:
+                    yield False, read2
 
     def unique_reads_on_different_references(self, aligner):
         read_pairs = {}
@@ -114,8 +174,18 @@ class BamParser(object):
 
         elif aligner == 'bwa':
             pass
+
         elif aligner == 'bowtie':
-            pass
+            for read1,read2 in zip(self.bam_file,self.bam_file2):
+                assert read1.qname == read2.qname
+                same_ref = read1.rname == read2.rname
+                if not same_ref and unique_link_alignment_bowtie(read1,read2): 
+                    read1.tlen = abs(read1.pos - read2.pos) + read1.rlen
+                    yield read1, read2
+                elif not same_ref and unique_link_alignment_bowtie(read1,read2): 
+                    read1.tlen = abs(read1.pos - read2.pos) + 2*read1.rlen
+                    yield read1, read2
+
         self.bam_file.seek(0)
 
     def long_reads_for_coverage(self):

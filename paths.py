@@ -1,3 +1,5 @@
+import Queue
+
 from pulp import *
 from mathstats.normaldist.truncatedskewed import param_est as GC
 
@@ -84,7 +86,7 @@ class Path(object):
         problem += lpSum( [ link_object.help_variable*link_object.nr_effective_links for (ctg1,ctg2), link_object in self.observations.iteritems()] ) , "objective"
 
         # adding constraints induced by the absolute value of objective function
-        print self.observations
+        #print self.observations
         for (ctg1,ctg2), link_object in self.observations.iteritems():
             problem += link_object.exp_mean_gapest - sum(map(lambda x: x, self.contig_lengths[link_object.from_ctg_index+1:link_object.to_ctg_index])) - link_object.mean_obs  - lpSum( gap_vars[ link_object.from_ctg_index : link_object.to_ctg_index] )  <= link_object.help_variable,  "helpcontraint_"+str(link_object.from_ctg_index)+'_'+ str(link_object.to_ctg_index)+'_'+str(link_object.link_type)
 
@@ -180,7 +182,6 @@ class PathFactory(object):
             self.cut_vertices.add((contigs[ctg].name, 0))
             self.cut_vertices.add((contigs[ctg].name,1))
         self.paths = []
-        self.queue = MyQUEUE()
 
 
     def find_paths(self):
@@ -211,12 +212,15 @@ class PathFactory(object):
     def BFS(self,start):
         
         temp_path = [start]
-        
-        self.queue.enqueue(temp_path)
+        self.queue = Queue.Queue() #MyQUEUE()
+        self.queue.put(temp_path)
+
         i = 0
-        while self.queue.IsEmpty() == False and i <= self.iter_tresh:
+        while not self.queue.empty() and i <= self.iter_tresh:
             i+=1
-            tmp_path = self.queue.dequeue() 
+            if i % 1000 == 0:
+                print 'BFS:',i
+            tmp_path = self.queue.get() 
             last_node = tmp_path[-1]
             try:
                 second_last_node = tmp_path[-2]
@@ -232,10 +236,10 @@ class PathFactory(object):
 
 
             for link_node in self.graph.neighbors(last_node):
-                if link_node not in tmp_path:
+                if link_node not in tmp_path and self.graph.other_end(link_node) not in tmp_path:
                     new_path = []
                     new_path = tmp_path + [link_node, self.graph.other_end(link_node)]
-                    self.queue.enqueue(new_path)
+                    self.queue.put(new_path)
    
 
     def merge_contig_paths(self,path1,path2):
@@ -325,32 +329,32 @@ class PathFactory(object):
         self.path_ends[ new_path.path[-1] ] = new_path
 
 
-class MyQUEUE(object): # just an implementation of a queue
+# class MyQUEUE(object): # just an implementation of a queue
     
-    def __init__(self):
-        self.holder = []
+#     def __init__(self):
+#         self.holder = []
         
-    def enqueue(self,val):
-        self.holder.append(val)
+#     def enqueue(self,val):
+#         self.holder.append(val)
         
-    def dequeue(self):
-        val = None
-        try:
-            val = self.holder[0]
-            if len(self.holder) == 1:
-                self.holder = []
-            else:
-                self.holder = self.holder[1:]   
-        except:
-            pass
+#     def dequeue(self):
+#         val = None
+#         try:
+#             val = self.holder[0]
+#             if len(self.holder) == 1:
+#                 self.holder = []
+#             else:
+#                 self.holder = self.holder[1:]   
+#         except:
+#             pass
             
-        return val  
+#         return val  
         
-    def IsEmpty(self):
-        result = False
-        if len(self.holder) == 0:
-            result = True
-        return result
+#     def IsEmpty(self):
+#         result = False
+#         if len(self.holder) == 0:
+#             result = True
+#         return result
 
 
 

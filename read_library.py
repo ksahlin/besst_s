@@ -37,10 +37,11 @@ def remove_outliers(ins_size_reads):
 
 class Library(object):
 	"""docstring for Library"""
-	def __init__(self, lib_name, lib_type, aligner, bam_path, link_file_path,mean=None,sd=None):
+	def __init__(self, lib_name, lib_type, aligner, bam_path, link_file_path, bam_path2=None, mean=None,sd=None):
 		super(Library, self).__init__()
 		self.lib_name = lib_name
 		self.bam_path = bam_path
+		self.bam_path2 = bam_path2
 		self.lib_type = lib_type
 		self.aligner = aligner
 		#open(link_file_path,'w').close()
@@ -51,14 +52,27 @@ class Library(object):
 
 
 	def calculate_coverage(self, contigs):
-		bam_iter = bam_parser.BamParser(self.bam_path)
+		bam_iter = bam_parser.BamParser(self.bam_path,bam_path2=self.bam_path2)
 
-		max_softclipped = 0
+		self.max_softclipped = 0
 
-		for read in bam_iter.aligned_reads():
-			contigs[bam_iter.bam_file.getrname(read.tid)].bases_aligned += read.alen
-			if read.rlen - read.qlen > max_softclipped:
-				self.max_softclipped = read.rlen - read.qlen
+		if self.aligner == 'bowtie':
+			for read1,read2 in bam_iter.aligned_reads(self.aligner):
+				if read1:
+					contigs[bam_iter.bam_file.getrname(read1.tid)].bases_aligned += read1.alen
+					if read1.rlen - read1.qlen > self.max_softclipped:
+						self.max_softclipped = read1.rlen - read1.qlen
+
+				if read2:
+					contigs[bam_iter.bam_file.getrname(read2.tid)].bases_aligned += read2.alen
+					if read2.rlen - read2.qlen > self.max_softclipped:
+						self.max_softclipped = read2.rlen - read2.qlen
+
+		elif self.aligner == 'bwamem' or self.aligner == 'bwa':
+			for read in bam_iter.aligned_reads(self.aligner):
+				contigs[bam_iter.bam_file.getrname(read.tid)].bases_aligned += read.alen
+				if read.rlen - read.qlen > self.max_softclipped:
+					self.max_softclipped = read.rlen - read.qlen
 
 		lib_cov = []
 		for contig in contigs.itervalues():
@@ -73,7 +87,7 @@ class Library(object):
 		ins_size_reads_innies = []
 		ins_size_reads_outies = []
 		read_length = []
-		for read_type,read in bam_parser.BamParser(self.bam_path).proper_aligned_unique_pairs(self.aligner,samples=1000000):
+		for read_type,read in bam_parser.BamParser(self.bam_path,bam_path2=self.bam_path2).proper_aligned_unique_pairs(self.aligner,samples=1000000):
 			if self.lib_type == 'mp': 
 				if read_type == 'innie':
 					ins_size_reads_innies.append(abs(read.tlen))
@@ -89,8 +103,21 @@ class Library(object):
 
 		count_contamine, count_total = 0,0
 
-		if self.lib_type == 'mp':
-			for read in bam_parser.BamParser(self.bam_path).aligned_reads():
+		if self.lib_type == 'mp' and self.aligner == 'bowtie':
+			for read1,read2 in bam_parser.BamParser(self.bam_path,bam_path2=self.bam_path2).aligned_reads(self.aligner):
+				if read1 and read2 and bam_parser.proper_unique_alignment_innie_bowtie(read1,read2):
+					count_contamine += 1
+				elif read1 and read2:
+					count_total += 2
+				elif read1:
+					count_total += 1
+				elif read2:
+					count_total += 1
+			self.contamine_rate = count_contamine/float(count_total)
+		
+
+		elif self.lib_type == 'mp' and (self.aligner == 'bwa' or self.aligner == 'bwamem'):
+			for read in bam_parser.BamParser(self.bam_path,bam_path2=self.bam_path2).aligned_reads(self.aligner):
 				if bam_parser.is_proper_aligned_unique_innie(read):
 					count_contamine += 1
 				count_total += 1
@@ -105,13 +132,13 @@ class Library(object):
 			self.sd = self.sd_innies if self.lib_type =='pe' else self.sd_outies
 
 	def sorted_bam_to_link_file(self,contigs, kmer_overlap):
-		bam_iter = bam_parser.BamParser(self.bam_path)
+		bam_iter = bam_parser.BamParser(self.bam_path,bam_path2=self.bam_path2)
 		edges = {}
 		for contig in contigs.keys():
 			edges[contig] = ContigConnections(contig)
 
 		for read1,read2 in bam_iter.unique_reads_on_different_references(self.aligner):
-			if read1.rnext != read2.tid or read2.rnext != read1.tid:
+			if (self.aligner == 'bwamem' or self.aligner == 'bwa') and (read1.rnext != read2.tid or read2.rnext != read1.tid):
 				print read1,read2
 			#print read1,read2
 			index, ctg = min(enumerate([read1.tid,read2.tid]), key=itemgetter(1))
@@ -140,7 +167,7 @@ class Library(object):
 					
 				##
 				# Reds must be FR (contamine reads)
-				
+
 				elif pe_obs1 + pe_obs2 < self.mean_innies + 4*self.sd_innies + kmer_overlap:
 					if index == 0:
 						edges[bam_iter.bam_file.getrname(ctg)].add_pe_link(pe_obs1,pe_obs2, read1.is_reverse, read2.is_reverse, bam_iter.bam_file.getrname(read2.tid),'pe') 
