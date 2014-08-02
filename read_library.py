@@ -68,7 +68,7 @@ class Library(object):
 					if read2.rlen - read2.qlen > self.max_softclipped:
 						self.max_softclipped = read2.rlen - read2.qlen
 
-		elif self.aligner == 'bwamem' or self.aligner == 'bwa':
+		elif self.aligner == 'bwa_mem' or self.aligner == 'bwa':
 			for read in bam_iter.aligned_reads(self.aligner):
 				contigs[bam_iter.bam_file.getrname(read.tid)].bases_aligned += read.alen
 				if read.rlen - read.qlen > self.max_softclipped:
@@ -116,7 +116,7 @@ class Library(object):
 			self.contamine_rate = count_contamine/float(count_total)
 		
 
-		elif self.lib_type == 'mp' and (self.aligner == 'bwa' or self.aligner == 'bwamem'):
+		elif self.lib_type == 'mp' and (self.aligner == 'bwa' or self.aligner == 'bwa_mem'):
 			for read in bam_parser.BamParser(self.bam_path,bam_path2=self.bam_path2).aligned_reads(self.aligner):
 				if bam_parser.is_proper_aligned_unique_innie(read):
 					count_contamine += 1
@@ -138,7 +138,7 @@ class Library(object):
 			edges[contig] = ContigConnections(contig)
 
 		for read1,read2 in bam_iter.unique_reads_on_different_references(self.aligner):
-			if (self.aligner == 'bwamem' or self.aligner == 'bwa') and (read1.rnext != read2.tid or read2.rnext != read1.tid):
+			if (self.aligner == 'bwa_mem' or self.aligner == 'bwa') and (read1.rnext != read2.tid or read2.rnext != read1.tid):
 				print read1,read2
 			#print read1,read2
 			index, ctg = min(enumerate([read1.tid,read2.tid]), key=itemgetter(1))

@@ -137,7 +137,7 @@ class BamParser(object):
             self.bam_file.seek(0)      
 
     def aligned_reads(self,aligner):
-        if aligner == 'bwa' or aligner == 'bwamem':
+        if aligner == 'bwa' or aligner == 'bwa_mem':
             for read in self.bam_file:
                 if not read.is_unmapped:
                     yield read 
