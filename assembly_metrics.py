@@ -4,13 +4,15 @@ class AssemblyMetrics(object):
 	def __init__(self, sequences):
 		super(AssemblyMetrics, self).__init__()
 		self.sequences = sequences
+		self.NX_values = [self.NX(x) for x in range(10,101,10)]
+		self.LX_values = [self.LX(x) for x in range(10,101,10)]
 	
 	def __str__(self):
 		string = ''
-		for x in range(10,101,10):
-			string += 'N{0} = {1}\n'.format(x,self.NX(x))
-		for x in range(10,101,10):
-			string += 'L{0} = {1}\n'.format(x,self.LX(x))
+		for i in range(1,11):
+			string += 'N{0} = {1}\n'.format(10*i,self.NX_values[i-1])
+		for i in range(1,11):
+			string += 'L{0} = {1}\n'.format(10*i,self.LX_values[i-1])
 
 		string += 'E-size: {0}\n'.format(self.E_size())
 		string += 'Longest contig: {0}\n'.format(self.longest_contig())

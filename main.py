@@ -101,6 +101,16 @@ def create_graph(G,contigs):
 
 # 	return(G)
 
+def score_scaffolding(path_factory, G_full):
+	good_links = 0
+	bad_links = 0
+	for path in path_factory.path_ends.itervalues():
+		path.find_supporting_links(G_full)
+		good_links += path.good_links
+		bad_links += path.bad_links
+
+	return good_links/float(bad_links)
+
 
 def main(args):
 	params = config_parser.ConfigParams()
@@ -183,50 +193,58 @@ def main(args):
 	print 'LOL NODES left:',len(G.nodes())/2
 
 	besst.get_cut_vertex_cutoff()
-	path_factory = paths.PathFactory(besst, G, contigs, 300 , 30, 40000)
-	#tmp_paths = []
-	#print G.edges(data=True)
-	for path in path_factory.find_paths():
-		print path, path.score, path.good_links,path.bad_links
 
-		for flank1,flank2 in zip(path.path[:-1],path.path[1:]):
-			if (flank1,flank2) in repeat_paths:
-				print 'heere__1'
-				print 'repeat path:',repeat_paths[(flank1,flank2)]
-				path.add_repeat_region(flank1, flank2, repeat_paths[(flank1,flank2)][1:-1])
-				path.find_supporting_links(G_full)
-				path.LP_solve_gaps()
-				path.score_path(G_full)
-				print 'after:'
-				print path, path.score, path.good_links, path.bad_links, 'lool'
+	score = 0
+	for cut_vertex_size in reversed(metrics.NX_values):
+		path_factory = paths.PathFactory(besst, G, contigs, cut_vertex_size , 30, 40000)
+		#tmp_paths = []
+		#print G.edges(data=True)
+		for path in path_factory.find_paths():
+			print path, path.score, path.good_links,path.bad_links
 
-		for flank1,flank2 in zip(reversed(path.path[:-1]),reversed(path.path[1:])):
-			if (flank1,flank2) in repeat_paths:
-				print 'heere__2'
-				print 'repeat path:',repeat_paths[(flank1,flank2)]
-				# path.add_repeat_region(flank1, flank2, repeat_paths[(flank1,flank2)][1:-1])
-				# path.find_supporting_links(G_full)
-				# path.LP_solve_gaps()
-				# path.score_path(G_full)
-				# print 'after:'
-				# print path, path.score, path.good_links, path.bad_links, 'lool'
+			for flank1,flank2 in zip(path.path[:-1],path.path[1:]):
+				if (flank1,flank2) in repeat_paths:
+					print 'heere__1'
+					print 'repeat path:',repeat_paths[(flank1,flank2)]
+					path.add_repeat_region(flank1, flank2, repeat_paths[(flank1,flank2)][1:-1])
+					path.find_supporting_links(G_full)
+					path.LP_solve_gaps()
+					path.score_path(G_full)
+					print 'after:'
+					print path, path.score, path.good_links, path.bad_links, 'lool'
 
-		# for repeat_ends in repeat_paths:
-		# 	if repeat_ends in zip(path.path[:-1],path.path[1:]) or repeat_ends in zip(reversed(path.path[:-1]),reversed(path.path[1:])):
-		# 		print 'heere__'
-		# 		print 'repeat path:',repeat_paths[repeat_ends]
-				# print 'original path :', path
-				# path.add_repeat_region(repeat_ends[0],repeat_ends[1],repeat_paths[repeat_ends][1:-1])
-				# path.find_supporting_links(G_full)
-				# path.LP_solve_gaps()
-				# path.score_path(G)
-				# print 'after:'
-				# print path, path.score, path.good_links, path.bad_links, 'lool'
-				# print path.gaps
-				# #
-		path_factory.add_subpath(path)
-		#tmp_paths.append(path)
+			for flank1,flank2 in zip(reversed(path.path[:-1]),reversed(path.path[1:])):
+				if (flank1,flank2) in repeat_paths:
+					print 'heere__2'
+					print 'repeat path:',repeat_paths[(flank1,flank2)]
+					# path.add_repeat_region(flank1, flank2, repeat_paths[(flank1,flank2)][1:-1])
+					# path.find_supporting_links(G_full)
+					# path.LP_solve_gaps()
+					# path.score_path(G_full)
+					# print 'after:'
+					# print path, path.score, path.good_links, path.bad_links, 'lool'
 
+			# for repeat_ends in repeat_paths:
+			# 	if repeat_ends in zip(path.path[:-1],path.path[1:]) or repeat_ends in zip(reversed(path.path[:-1]),reversed(path.path[1:])):
+			# 		print 'heere__'
+			# 		print 'repeat path:',repeat_paths[repeat_ends]
+					# print 'original path :', path
+					# path.add_repeat_region(repeat_ends[0],repeat_ends[1],repeat_paths[repeat_ends][1:-1])
+					# path.find_supporting_links(G_full)
+					# path.LP_solve_gaps()
+					# path.score_path(G)
+					# print 'after:'
+					# print path, path.score, path.good_links, path.bad_links, 'lool'
+					# print path.gaps
+					# #
+			path_factory.add_subpath(path)
+			#tmp_paths.append(path)
+
+		scaffolding_score = score_scaffolding(path_factory, G_full)
+		print 'CUTOFF:',cut_vertex_size, 'SCORE:', scaffolding_score
+		if scaffolding_score > score:
+			score = scaffolding_score
+			best_scaffolding_path_factory = path_factory
 
 	##
 	# Make fasta sequences for all paths
@@ -239,7 +257,7 @@ def main(args):
 	# 	print >> scaffold_file, scaf
 
 	already_printed = set()
-	for path in path_factory.path_ends.itervalues():#path_factory.final_paths
+	for path in best_scaffolding_path_factory.path_ends.itervalues():#path_factory.final_paths
 		end1 = path.path[0][0]
 		end2 = path.path[-1][0]
 		
