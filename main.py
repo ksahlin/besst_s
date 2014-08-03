@@ -194,7 +194,8 @@ def main(args):
 
 	besst.get_cut_vertex_cutoff()
 	score_file = open(os.path.join(besst.config_params.output_path,'score_info.txt'),'w')
-
+	for lib in besst.libs:
+		print >> score_file, lib
 	score = 0
 	for cut_vertex_size in reversed(metrics.NX_values[-2:]):
 		print 'CUTOFF:',cut_vertex_size
