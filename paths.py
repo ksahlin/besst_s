@@ -187,8 +187,9 @@ class PathFactory(object):
     def find_paths(self):
         self.already_visited = set()
         for start in self.cut_vertices:
+            high_score_paths = []
             self.forbidden = set([self.graph.other_end(start)])
-            #print 'treating contig:', start
+            print 'treating contig:', start
             contig_paths = []
             for path in self.BFS(start):
                 p = Path(self.besst, path, self.contigs)
@@ -199,13 +200,14 @@ class PathFactory(object):
                 contig_paths.append(p)
             sorted_paths = sorted(contig_paths, reverse=True)
             try:
-                high_score_path = sorted_paths[0]
+                high_score_paths = sorted_paths[0:5]
             except:
                 continue
-            high_score_path.LP_solve_gaps()
 
             #print high_score_path.good_links,high_score_path.bad_links
-            self.paths.append(high_score_path) 
+            for path in high_score_paths:
+                path.LP_solve_gaps()
+                self.paths.append(path) 
             self.already_visited.add(start)
         return sorted(self.paths, reverse=True)
 
