@@ -188,7 +188,7 @@ class PathFactory(object):
         self.already_visited = set()
         for start in self.cut_vertices:
             self.forbidden = set([self.graph.other_end(start)])
-            print 'treating contig:', start
+            #print 'treating contig:', start
             contig_paths = []
             for path in self.BFS(start):
                 p = Path(self.besst, path, self.contigs)
@@ -217,9 +217,9 @@ class PathFactory(object):
 
         i = 0
         while not self.queue.empty() and i <= self.iter_tresh:
-            i+=1
-            if i % 1000 == 0:
-                print 'BFS:',i
+            #i+=1
+            #if i % 5000 == 0:
+            #    print 'BFS:',i
             tmp_path = self.queue.get() 
             last_node = tmp_path[-1]
             try:
@@ -290,7 +290,7 @@ class PathFactory(object):
 
         for node in path.path:
             if not self.contigs[node[0]].is_repeat and node in self.already_merged:
-                print 'Unique ctg already treated'
+                #print 'Unique ctg already treated'
                 return
 
 

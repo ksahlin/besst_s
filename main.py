@@ -193,10 +193,12 @@ def main(args):
 	print 'LOL NODES left:',len(G.nodes())/2
 
 	besst.get_cut_vertex_cutoff()
+	score_file = open(os.path.join(besst.config_params.output_path,'score_info.txt'),'w')
 
 	score = 0
-	for cut_vertex_size in reversed(metrics.NX_values):
-		path_factory = paths.PathFactory(besst, G, contigs, cut_vertex_size , 30, 40000)
+	for cut_vertex_size in reversed(metrics.NX_values[-2:]):
+		print 'CUTOFF:',cut_vertex_size
+		path_factory = paths.PathFactory(besst, G, contigs, cut_vertex_size , 30, 10000)
 		#tmp_paths = []
 		#print G.edges(data=True)
 		for path in path_factory.find_paths():
@@ -204,19 +206,20 @@ def main(args):
 
 			for flank1,flank2 in zip(path.path[:-1],path.path[1:]):
 				if (flank1,flank2) in repeat_paths:
-					print 'heere__1'
-					print 'repeat path:',repeat_paths[(flank1,flank2)]
+					#print 'heere__1'
+					#print 'repeat path:',repeat_paths[(flank1,flank2)]
 					path.add_repeat_region(flank1, flank2, repeat_paths[(flank1,flank2)][1:-1])
 					path.find_supporting_links(G_full)
 					path.LP_solve_gaps()
 					path.score_path(G_full)
-					print 'after:'
-					print path, path.score, path.good_links, path.bad_links, 'lool'
+					#print 'after:'
+					#print path, path.score, path.good_links, path.bad_links, 'lool'
 
 			for flank1,flank2 in zip(reversed(path.path[:-1]),reversed(path.path[1:])):
 				if (flank1,flank2) in repeat_paths:
-					print 'heere__2'
-					print 'repeat path:',repeat_paths[(flank1,flank2)]
+					pass
+					#print 'heere__2'
+					#print 'repeat path:',repeat_paths[(flank1,flank2)]
 					# path.add_repeat_region(flank1, flank2, repeat_paths[(flank1,flank2)][1:-1])
 					# path.find_supporting_links(G_full)
 					# path.LP_solve_gaps()
@@ -241,7 +244,7 @@ def main(args):
 			#tmp_paths.append(path)
 
 		scaffolding_score = score_scaffolding(path_factory, G_full)
-		print 'CUTOFF:',cut_vertex_size, 'SCORE:', scaffolding_score
+		print >> score_file, 'CUTOFF:',cut_vertex_size, 'SCORE:', scaffolding_score
 		if scaffolding_score > score:
 			score = scaffolding_score
 			best_scaffolding_path_factory = path_factory

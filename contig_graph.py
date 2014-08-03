@@ -156,14 +156,16 @@ class ContigGraph(nx.MultiGraph):
 							contigs[node[0]].is_repeat = True
 							yield node
 						else:
-							print 'THIS IS okay', sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs)
+							pass
+							#print 'THIS IS okay', sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs)
 					elif lib.lib_type == 'mp':
 						if sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs) > lib.mean + 4*lib.sd + 2*besst.config_params.kmer_overlap and contigs[node[0]].coverage > 1.5 * besst.tot_mean_coverage:
 							print 'here okay', sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs)
 							contigs[node[0]].is_repeat = True
 							yield node 
 						else:
-							print 'THIS IS okay', sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs)
+							pass
+							#print 'THIS IS okay', sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs)
 
 
 	def freeze_repeat_regions(self, contigs, besst):

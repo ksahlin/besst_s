@@ -22,18 +22,18 @@ def open_bam_file(bam_file_path):
 def is_proper_aligned_unique_innie(read):
     return (read.is_reverse and not read.mate_is_reverse and  read.tlen < 0 and read.rname == read.mrnm) or \
                 (not read.is_reverse and read.mate_is_reverse and read.is_read2 and read.tlen > 0 and read.rname == read.mrnm ) \
-                and not read.mate_is_unmapped and read.opt('XT')=='U' and not read.is_secondary
+                and not read.mate_is_unmapped and read.mapq > 10 and not read.is_secondary
 def is_proper_aligned_unique_outie(read):
     return (read.is_reverse and not read.mate_is_reverse and  read.tlen > 0 and read.rname == read.mrnm) or \
                 (not read.is_reverse and read.mate_is_reverse and read.is_read2 and read.tlen < 0 and read.rname == read.mrnm ) \
-                and not read.mate_is_unmapped and read.opt('XT')=='U' and not read.is_secondary
+                and not read.mate_is_unmapped and read.mapq > 10 and not read.is_secondary
 
 def is_unique_read_link(read):
     # if  not read.is_unmapped and not read.mate_is_unmapped and read.rname != read.mrnm \
     # and read.opt('XT')=='U' and not read.is_secondary and read.rlen != read.alen:
     #     print read
     return not read.is_unmapped and not read.mate_is_unmapped and read.rname != read.mrnm \
-    and read.opt('XT')=='U' and not read.is_secondary
+    and read.mapq > 10 and not read.is_secondary
 
 
 ### BOWTIE ####
