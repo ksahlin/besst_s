@@ -131,6 +131,9 @@ def main(args):
 	create_graph(G,contigs)
 	besst.calculate_total_mean_coverage()
 
+	score_file = open(os.path.join(besst.config_params.output_path,'score_info.txt'),'w')
+	for lib in besst.libs:
+		print >> score_file, lib
 
 	#pickle.dump( G.copy_no_edge_info(), open( "/tmp/save_graph.p", "wb" ) )
 	pickle.dump( G, open( "/tmp/save_graph.p", "wb" ) )
@@ -142,7 +145,7 @@ def main(args):
 
 	# graph_path = os.path.join(besst.config_params.output_path,'ctg_graph_w_repeats.png')	
 	# G.draw(graph_path,repeats)
-	graph_path = os.path.join(besst.config_params.output_path,'ctg_graph_no_repeats1.png')
+	# graph_path = os.path.join(besst.config_params.output_path,'ctg_graph_no_repeats1.png')
 	# G.remove_nodes_from([repeat[0] for repeat in repeats])
 	
 	#G.draw(graph_path,G.nodes())
@@ -193,9 +196,6 @@ def main(args):
 	print 'LOL NODES left:',len(G.nodes())/2
 
 	besst.get_cut_vertex_cutoff()
-	score_file = open(os.path.join(besst.config_params.output_path,'score_info.txt'),'w')
-	for lib in besst.libs:
-		print >> score_file, lib
 	score = 0
 	for cut_vertex_size in reversed(metrics.NX_values[-2:]):
 		print 'CUTOFF:',cut_vertex_size

@@ -148,7 +148,7 @@ class ContigGraph(nx.MultiGraph):
 			for lib in besst.libs: 
 				if len(self.lib_neighbors(node, lib)) > 1:
 					if lib.lib_type == 'pe':
-						if sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs) > lib.mean + 4*lib.sd + 2*besst.config_params.kmer_overlap and contigs[node[0]].coverage > 1.5 * besst.tot_mean_coverage:
+						if sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs) > lib.mean + 4*lib.sd + 2*besst.config_params.kmer_overlap and contigs[node[0]].coverage > 3 * besst.tot_mean_coverage:
 							print 'here okay', sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs)
 							# for nbr in self.lib_neighbors(node, lib):
 							# 	print 'info:',self[node][nbr]
@@ -159,7 +159,7 @@ class ContigGraph(nx.MultiGraph):
 							pass
 							#print 'THIS IS okay', sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs)
 					elif lib.lib_type == 'mp':
-						if sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs) > lib.mean + 4*lib.sd + 2*besst.config_params.kmer_overlap and contigs[node[0]].coverage > 1.5 * besst.tot_mean_coverage:
+						if sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs) > lib.mean + 4*lib.sd + 2*besst.config_params.kmer_overlap and contigs[node[0]].coverage > 3 * besst.tot_mean_coverage:
 							print 'here okay', sum_of_all_nbrs_exept_longest(self.lib_neighbors(node, lib), contigs)
 							contigs[node[0]].is_repeat = True
 							yield node 
