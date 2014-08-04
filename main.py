@@ -197,7 +197,7 @@ def main(args):
 
 	besst.get_cut_vertex_cutoff()
 	score = 0
-	for cut_vertex_size in reversed(metrics.NX_values[-2:]):
+	for cut_vertex_size in reversed(metrics.NX_values[-2:]): #range(100,351,50):#
 		print 'CUTOFF:',cut_vertex_size
 		path_factory = paths.PathFactory(besst, G, contigs, cut_vertex_size , 30, 10000)
 		#tmp_paths = []

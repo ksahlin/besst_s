@@ -159,16 +159,16 @@ class BamParser(object):
                     #tmp for tests:
                     #print read.qname[:-1]
                     #print read_pairs
-                    if read.qname[:-1] in read_pairs:
+                    if read.qname in read_pairs:
                         #print 'lol'
                         #read2 = read_pairs[read.qname]
                         #if read.tid == read2.tid:    
-                        yield read, read_pairs[read.qname[:-1]]
+                        yield read, read_pairs[read.qname]
                         #else: 
                         #    pass
-                        del read_pairs[read.qname[:-1]]
+                        del read_pairs[read.qname]
                     else:
-                        read_pairs[read.qname[:-1]] = read
+                        read_pairs[read.qname] = read
                     
 
 

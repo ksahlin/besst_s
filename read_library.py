@@ -138,8 +138,8 @@ class Library(object):
 			edges[contig] = ContigConnections(contig)
 
 		for read1,read2 in bam_iter.unique_reads_on_different_references(self.aligner):
-			if (self.aligner == 'bwa_mem' or self.aligner == 'bwa') and (read1.rnext != read2.tid or read2.rnext != read1.tid):
-				print read1,read2
+			#if (self.aligner == 'bwa_mem' or self.aligner == 'bwa') and (read1.rnext != read2.tid or read2.rnext != read1.tid):
+			#	print read1,read2
 			#print read1,read2
 			index, ctg = min(enumerate([read1.tid,read2.tid]), key=itemgetter(1))
 			#print bam_iter.bam_file.getrname(read1.tid),bam_iter.bam_file.getrname(read2.tid)
@@ -174,7 +174,8 @@ class Library(object):
 					else:
 						edges[bam_iter.bam_file.getrname(ctg)].add_pe_link(pe_obs2,pe_obs1, read2.is_reverse, read1.is_reverse, bam_iter.bam_file.getrname(read1.tid), 'pe') 
 				else:
-					print 'spurious link'
+					pass
+					#print 'spurious link'
 
 			else:
 				obs1, obs2 = bam_parser.get_pe_observation(read1, read2, bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read1.tid)], bam_iter.contig_lengths[ bam_iter.bam_file.getrname(read2.tid)])
